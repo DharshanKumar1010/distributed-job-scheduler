@@ -153,6 +153,7 @@ async def _create_single_job(
         max_attempts=payload.max_attempts,
         retry_strategy=payload.retry_strategy.value,
         base_delay_seconds=payload.base_delay_seconds,
+        max_delay_seconds=payload.max_delay_seconds,
         tags=payload.tags,
         idempotency_key=idempotency_key,
     )
@@ -200,6 +201,7 @@ async def _create_batch_job(
         max_attempts=payload.max_attempts,
         retry_strategy=payload.retry_strategy.value,
         base_delay_seconds=payload.base_delay_seconds,
+        max_delay_seconds=payload.max_delay_seconds,
         tags=payload.tags,
         idempotency_key=idempotency_key,
         started_at=now,
@@ -229,6 +231,7 @@ async def _create_batch_job(
                 max_attempts=child.max_attempts,
                 retry_strategy=child.retry_strategy.value,
                 base_delay_seconds=child.base_delay_seconds,
+                max_delay_seconds=child.max_delay_seconds,
                 tags=child.tags,
                 idempotency_key=child_key,
             )

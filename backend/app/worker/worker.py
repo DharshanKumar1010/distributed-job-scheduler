@@ -51,7 +51,7 @@ CLAIM_QUERY = text(
 )
 
 
-async def _run_handler(payload: dict) -> None:
+async def _run_handler(payload: dict, attempt_number: int) -> None:
     """Execute a job's work.
 
     Real handler dispatch is out of scope for this phase. To avoid executing
@@ -63,6 +63,11 @@ async def _run_handler(payload: dict) -> None:
 
     if handler_name == "fail":
         raise RuntimeError(payload.get("error_message", "Simulated handler failure"))
+    if handler_name == "fail_until_attempt":
+        succeed_on_attempt = int(payload.get("succeed_on_attempt", 1))
+        if attempt_number < succeed_on_attempt:
+            raise RuntimeError(f"Simulated failure on attempt {attempt_number}")
+        return
     if handler_name == "sleep":
         await asyncio.sleep(float(payload.get("seconds", 1)))
         return
@@ -257,7 +262,7 @@ class JobWorker:
         error: Exception | None = None
         tb: str | None = None
         try:
-            await _run_handler(job_row.get("payload") or {})
+            await _run_handler(job_row.get("payload") or {}, attempt_number)
         except Exception as exc:  # noqa: BLE001 - a bad job must never crash the worker
             error = exc
             tb = traceback.format_exc()
@@ -342,7 +347,10 @@ class JobWorker:
 
             if attempt_number < job_row["max_attempts"]:
                 next_run = compute_next_run(
-                    job_row["retry_strategy"], job_row["base_delay_seconds"], attempt_number
+                    job_row["retry_strategy"],
+                    job_row["base_delay_seconds"],
+                    attempt_number,
+                    job_row["max_delay_seconds"],
                 )
                 await db.execute(
                     update(Job)

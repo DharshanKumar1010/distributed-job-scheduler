@@ -4,7 +4,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.exceptions import APIError
-from app.routers import auth, jobs, organizations, projects, queues, retry_policies, workers
+from app.routers import (
+    auth,
+    dead_letter_queue,
+    jobs,
+    organizations,
+    projects,
+    queues,
+    retry_policies,
+    workers,
+)
 
 app = FastAPI(title="Distributed Job Scheduler")
 
@@ -15,6 +24,7 @@ app.include_router(queues.router)
 app.include_router(retry_policies.router)
 app.include_router(jobs.router)
 app.include_router(workers.router)
+app.include_router(dead_letter_queue.router)
 
 
 @app.exception_handler(APIError)

@@ -191,7 +191,7 @@ ANTHROPIC_API_KEY=sk-...
 - [x] Phase 2 — Auth + Orgs + Projects + Queues
 - [x] Phase 3 — Job submission API (all 5 job types)
 - [x] Phase 4 — Worker process (claim, execute, heartbeat, graceful shutdown)
-- [ ] Phase 5 — Retries + DLQ + Reaper
+- [x] Phase 5 — Retries + DLQ + Reaper
 - [ ] Phase 6 — Dashboard (React)
 - [ ] Phase 7 — WebSocket live updates
 - [ ] Phase 8 — Workflow dependencies (DAG)

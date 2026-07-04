@@ -20,6 +20,7 @@ class JobCreateRequest(BaseModel):
     max_attempts: int = Field(default=3, ge=1)
     retry_strategy: RetryStrategy = RetryStrategy.exponential
     base_delay_seconds: int = Field(default=60, ge=1)
+    max_delay_seconds: int = Field(default=3600, ge=1)
     max_runtime_seconds: int = Field(default=300, ge=1)
     tags: list[str] = Field(default_factory=list)
     idempotency_key: str | None = Field(default=None, max_length=255)

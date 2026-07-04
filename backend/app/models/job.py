@@ -95,6 +95,9 @@ class Job(Base, TimestampMixin):
     base_delay_seconds: Mapped[int] = mapped_column(
         Integer, nullable=False, default=60, server_default=text("60")
     )
+    max_delay_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=3600, server_default=text("3600")
+    )
 
     worker_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workers.id"), nullable=True
