@@ -1,0 +1,135 @@
+import uuid
+
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.dependencies import get_current_user, get_db
+from app.models.queue import Queue
+from app.models.user import User
+from app.schemas.common import DataResponse, PaginatedResponse, PaginationMeta
+from app.schemas.queue import QueueCreate, QueueOut, QueueStats, QueueUpdate
+from app.services import project_service, queue_service
+
+router = APIRouter(prefix="/projects", tags=["queues"])
+
+
+def _to_queue_out(queue: Queue, pending: int, running: int, failed: int, throughput: int) -> QueueOut:
+    return QueueOut(
+        id=queue.id,
+        project_id=queue.project_id,
+        name=queue.name,
+        slug=queue.slug,
+        description=queue.description,
+        priority=queue.priority,
+        concurrency_limit=queue.concurrency_limit,
+        retry_policy_id=queue.retry_policy_id,
+        is_paused=queue.is_paused,
+        is_active=queue.is_active,
+        shard_count=queue.shard_count,
+        created_at=queue.created_at,
+        updated_at=queue.updated_at,
+        stats=QueueStats(
+            pending_count=pending,
+            running_count=running,
+            failed_count=failed,
+            throughput_per_min=throughput,
+        ),
+    )
+
+
+@router.get("/{project_id}/queues", response_model=PaginatedResponse[QueueOut])
+async def list_queues(
+    project_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await project_service.get_project(db, current_user.org_id, project_id)
+    rows, total = await queue_service.list_queues_with_stats(db, project_id, page, limit)
+    return PaginatedResponse(
+        data=[_to_queue_out(*row) for row in rows],
+        meta=PaginationMeta(total=total, page=page, limit=limit),
+    )
+
+
+@router.post(
+    "/{project_id}/queues", response_model=DataResponse[QueueOut], status_code=status.HTTP_201_CREATED
+)
+async def create_queue(
+    project_id: uuid.UUID,
+    payload: QueueCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await project_service.get_project(db, current_user.org_id, project_id)
+    queue = await queue_service.create_queue(db, project_id, payload.model_dump())
+    stats = await queue_service.get_stats_for_queue(db, queue.id)
+    return DataResponse(data=_to_queue_out(queue, *stats))
+
+
+@router.get("/{project_id}/queues/{queue_id}", response_model=DataResponse[QueueOut])
+async def get_queue(
+    project_id: uuid.UUID,
+    queue_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await project_service.get_project(db, current_user.org_id, project_id)
+    row = await queue_service.get_queue_with_stats(db, project_id, queue_id)
+    return DataResponse(data=_to_queue_out(*row))
+
+
+@router.patch("/{project_id}/queues/{queue_id}", response_model=DataResponse[QueueOut])
+async def update_queue(
+    project_id: uuid.UUID,
+    queue_id: uuid.UUID,
+    payload: QueueUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await project_service.get_project(db, current_user.org_id, project_id)
+    queue = await queue_service.update_queue(
+        db, project_id, queue_id, payload.model_dump(exclude_unset=True)
+    )
+    stats = await queue_service.get_stats_for_queue(db, queue.id)
+    return DataResponse(data=_to_queue_out(queue, *stats))
+
+
+@router.delete("/{project_id}/queues/{queue_id}", response_model=DataResponse[QueueOut])
+async def delete_queue(
+    project_id: uuid.UUID,
+    queue_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await project_service.get_project(db, current_user.org_id, project_id)
+    queue = await queue_service.soft_delete_queue(db, project_id, queue_id)
+    stats = await queue_service.get_stats_for_queue(db, queue.id)
+    return DataResponse(data=_to_queue_out(queue, *stats))
+
+
+@router.post("/{project_id}/queues/{queue_id}/pause", response_model=DataResponse[QueueOut])
+async def pause_queue(
+    project_id: uuid.UUID,
+    queue_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await project_service.get_project(db, current_user.org_id, project_id)
+    queue = await queue_service.pause_queue(db, project_id, queue_id)
+    stats = await queue_service.get_stats_for_queue(db, queue.id)
+    return DataResponse(data=_to_queue_out(queue, *stats))
+
+
+@router.post("/{project_id}/queues/{queue_id}/resume", response_model=DataResponse[QueueOut])
+async def resume_queue(
+    project_id: uuid.UUID,
+    queue_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await project_service.get_project(db, current_user.org_id, project_id)
+    queue = await queue_service.resume_queue(db, project_id, queue_id)
+    stats = await queue_service.get_stats_for_queue(db, queue.id)
+    return DataResponse(data=_to_queue_out(queue, *stats))
