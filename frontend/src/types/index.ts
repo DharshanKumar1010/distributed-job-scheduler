@@ -245,16 +245,62 @@ export interface DeadLetterQueueEntry {
 
 // ---- WebSocket events ----
 
+export type WsEventName =
+  | 'connection.established'
+  | 'snapshot'
+  | 'job.created'
+  | 'job.claimed'
+  | 'job.running'
+  | 'job.updated'
+  | 'job.completed'
+  | 'job.failed'
+  | 'job.dead'
+  | 'worker.connected'
+  | 'worker.disconnected'
+  | 'worker.heartbeat'
+  | 'queue.stats'
+
 export interface WsEnvelope<T = unknown> {
-  event:
-    | 'job.created'
-    | 'job.updated'
-    | 'job.completed'
-    | 'job.failed'
-    | 'job.dead'
-    | 'worker.connected'
-    | 'worker.disconnected'
-    | 'queue.stats'
+  event: WsEventName
   data: T
   ts: string
+}
+
+export interface WsSnapshotData {
+  active_workers: number
+  queued_jobs: number
+  running_jobs: number
+}
+
+export interface WsJobEventData {
+  job_id: string
+  name: string
+  queue_id: string
+  worker_id?: string | null
+  attempts?: number
+  max_attempts?: number
+  started_at?: string
+  duration_ms?: number
+  error_message?: string
+  next_retry_at?: string | null
+  will_retry?: boolean
+  total_attempts?: number
+  last_error?: string
+}
+
+export interface WsWorkerHeartbeatData {
+  worker_id: string
+  hostname: string
+  queue_id: string
+  cpu_pct: number | null
+  mem_pct: number | null
+  active_jobs: number
+  max_concurrency: number
+}
+
+export interface WsQueueStatsData {
+  queue_id: string
+  pending_count: number
+  running_count: number
+  failed_count: number
 }

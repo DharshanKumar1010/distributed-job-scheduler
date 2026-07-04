@@ -4,6 +4,8 @@ interface PulseRingProps {
   color: PulseColor
   /** Static dot with no animation — used for "dead"/offline states. */
   pulse?: boolean
+  /** Dot diameter in px (the outer expanding ring scales from this size). */
+  size?: number
   className?: string
 }
 
@@ -13,11 +15,14 @@ const COLOR_VAR: Record<PulseColor, string> = {
   danger: 'var(--danger)',
 }
 
-export function PulseRing({ color, pulse = true, className = '' }: PulseRingProps) {
+export function PulseRing({ color, pulse = true, size = 10, className = '' }: PulseRingProps) {
   const dotColor = COLOR_VAR[color]
 
   return (
-    <span className={`relative inline-flex h-2.5 w-2.5 shrink-0 ${className}`}>
+    <span
+      className={`relative inline-flex shrink-0 ${className}`}
+      style={{ width: size, height: size }}
+    >
       {pulse && (
         <span
           className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full"
@@ -25,7 +30,7 @@ export function PulseRing({ color, pulse = true, className = '' }: PulseRingProp
         />
       )}
       <span
-        className="relative inline-flex h-2.5 w-2.5 rounded-full"
+        className="relative inline-flex h-full w-full rounded-full"
         style={{ backgroundColor: dotColor }}
       />
     </span>

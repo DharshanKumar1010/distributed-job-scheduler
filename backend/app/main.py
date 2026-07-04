@@ -1,9 +1,16 @@
+import asyncio
+import contextlib
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from redis.asyncio import Redis
 
+from app.config import settings
 from app.exceptions import APIError
 from app.routers import (
     auth,
@@ -15,8 +22,30 @@ from app.routers import (
     retry_policies,
     workers,
 )
+from app.websocket.hub import hub
+from app.websocket.router import router as websocket_router
+from app.websocket.subscriber import run_redis_subscriber
 
-app = FastAPI(title="Distributed Job Scheduler")
+logger = logging.getLogger("app")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    redis_client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+    await redis_client.ping()
+    subscriber_task = asyncio.create_task(run_redis_subscriber(hub, redis_client))
+    logger.info("Redis subscriber started")
+
+    yield
+
+    subscriber_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await subscriber_task
+    await redis_client.aclose()
+    logger.info("Redis subscriber stopped")
+
+
+app = FastAPI(title="Distributed Job Scheduler", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +63,7 @@ app.include_router(retry_policies.router)
 app.include_router(jobs.router)
 app.include_router(workers.router)
 app.include_router(dead_letter_queue.router)
+app.include_router(websocket_router, prefix="/ws")
 
 
 @app.exception_handler(APIError)

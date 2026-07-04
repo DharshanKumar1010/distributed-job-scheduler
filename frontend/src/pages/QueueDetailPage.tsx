@@ -98,7 +98,7 @@ export function QueueDetailPage() {
         retry_policy_id: retryPolicyId || null,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['queue', project?.id, queueId] })
+      queryClient.invalidateQueries({ queryKey: ['queue', queueId] })
       queryClient.invalidateQueries({ queryKey: ['queues', project?.id] })
     },
   })

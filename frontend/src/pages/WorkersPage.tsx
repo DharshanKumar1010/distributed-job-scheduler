@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { ErrorState } from '../components/ErrorState'
 import { PageHeader } from '../components/PageHeader'
 import { Skeleton } from '../components/Skeleton'
@@ -5,11 +6,19 @@ import { WorkerCard } from '../components/WorkerCard'
 import { useDefaultProject } from '../hooks/useProject'
 import { useQueues } from '../hooks/useQueue'
 import { useWorkers } from '../hooks/useWorkers'
+import { useLiveStatsStore } from '../store/liveStatsStore'
 
 export function WorkersPage() {
   const { data: project } = useDefaultProject()
   const { data: queues } = useQueues(project?.id)
   const { data: workers, isLoading, isError, refetch } = useWorkers()
+  const seedWorkers = useLiveStatsStore((s) => s.seedWorkers)
+
+  // Seed live status from this page's own fetch too — DashboardPage isn't
+  // guaranteed to have run first if the user lands here directly.
+  useEffect(() => {
+    if (workers) seedWorkers(workers)
+  }, [workers, seedWorkers])
 
   const queueNameById = new Map((queues ?? []).map((q) => [q.id, q.name]))
 

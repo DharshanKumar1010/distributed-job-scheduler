@@ -1,24 +1,24 @@
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
 import { ErrorState } from '../components/ErrorState'
+import { LiveFeed } from '../components/LiveFeed'
 import { PageHeader } from '../components/PageHeader'
+import { PulseRing } from '../components/PulseRing'
 import { Skeleton } from '../components/Skeleton'
 import { StatCard } from '../components/StatCard'
-import { StatusBadge } from '../components/StatusBadge'
 import { useDashboardStats } from '../hooks/useDashboardStats'
 import { useDefaultProject } from '../hooks/useProject'
-import { formatTimestamp } from '../lib/format'
+import { useWebSocket } from '../hooks/useWebSocket'
 
 export function DashboardPage() {
   const { data: project, isLoading: projectLoading, isError: projectError } = useDefaultProject()
-  const {
-    data: stats,
-    isLoading: statsLoading,
-    isError: statsError,
-    refetch,
-  } = useDashboardStats(project?.id)
+  const { stats, isLoading: statsLoading, isError: statsError, refetch } = useDashboardStats(
+    project?.id,
+  )
+  const { status: wsStatus } = useWebSocket()
 
   const isLoading = projectLoading || statsLoading
   const isError = projectError || statsError
+  const isLive = wsStatus === 'connected'
 
   return (
     <div>
@@ -34,7 +34,7 @@ export function DashboardPage() {
         <ErrorState message="Couldn't load dashboard data" onRetry={() => refetch()} />
       )}
 
-      {!isLoading && !isError && stats && (
+      {!isLoading && !isError && (
         <>
           <div className="grid grid-cols-4 gap-4">
             <StatCard label="Jobs Today" value={stats.jobsToday} />
@@ -84,26 +84,25 @@ export function DashboardPage() {
           </div>
 
           <div className="mt-6 rounded-lg border border-border bg-card p-5">
-            <div className="mb-2 text-xs uppercase tracking-widest text-secondary">Live Feed</div>
-            {stats.recentJobs.length === 0 && (
-              <p className="py-6 text-center text-sm text-secondary">No recent activity</p>
-            )}
-            <div>
-              {stats.recentJobs.map((job) => (
-                <div
-                  key={job.id}
-                  className="flex items-center justify-between border-t border-border py-2.5 first:border-t-0"
-                >
-                  <span className="truncate text-sm text-primary">{job.name}</span>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span className="font-mono text-xs text-secondary">
-                      {formatTimestamp(job.updated_at)}
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-xs uppercase tracking-widest text-secondary">Live Feed</div>
+              <div className="flex items-center gap-1.5">
+                {isLive ? (
+                  <>
+                    <PulseRing color="success" pulse size={8} />
+                    <span className="text-xs" style={{ color: 'var(--accent)' }}>
+                      LIVE
                     </span>
-                    <StatusBadge status={job.status} />
-                  </div>
-                </div>
-              ))}
+                  </>
+                ) : (
+                  <>
+                    <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--text-secondary)' }} />
+                    <span className="text-xs text-secondary">OFFLINE</span>
+                  </>
+                )}
+              </div>
             </div>
+            <LiveFeed />
           </div>
         </>
       )}

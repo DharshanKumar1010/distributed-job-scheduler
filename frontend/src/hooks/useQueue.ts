@@ -12,7 +12,10 @@ export function useQueues(projectId: string | undefined) {
 
 export function useQueue(projectId: string | undefined, queueId: string | undefined) {
   return useQuery({
-    queryKey: ['queue', projectId, queueId],
+    // Keyed by queueId alone (not [queue, projectId, queueId]) so WebSocket
+    // queue.stats events — which only know queue_id — can patch this cache
+    // entry directly via setQueryData(['queue', queueId], ...).
+    queryKey: ['queue', queueId],
     queryFn: () => getQueue(projectId as string, queueId as string),
     enabled: !!projectId && !!queueId,
     refetchInterval: 5000,

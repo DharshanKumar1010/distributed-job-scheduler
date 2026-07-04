@@ -2,7 +2,6 @@ import { LayoutDashboard, ListTree, LogOut, Skull, Users } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useAuthStore } from '../store/authStore'
-import { useLiveStore } from '../store/liveStore'
 import { Logo } from './Logo'
 import { PulseRing } from './PulseRing'
 
@@ -23,18 +22,35 @@ function breadcrumbFor(pathname: string): string {
   return ''
 }
 
+const CONNECTION_DISPLAY: Record<
+  ReturnType<typeof useWebSocket>['status'],
+  { color: 'success' | 'warning' | 'danger'; pulse: boolean; label: string; textColor: string }
+> = {
+  connected: { color: 'success', pulse: true, label: 'Live', textColor: 'var(--success)' },
+  connecting: { color: 'warning', pulse: true, label: 'Connecting...', textColor: 'var(--warning)' },
+  reconnecting: { color: 'warning', pulse: false, label: 'Reconnecting...', textColor: 'var(--warning)' },
+  disconnected: { color: 'danger', pulse: false, label: 'Offline', textColor: 'var(--danger)' },
+}
+
+const MAX_RECONNECT_DISPLAY = 6
+
 export function Layout() {
-  useWebSocket()
+  const { status: wsStatus, reconnectAttempt } = useWebSocket()
   const location = useLocation()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
-  const wsStatus = useLiveStore((s) => s.status)
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
+
+  const connection = CONNECTION_DISPLAY[wsStatus]
+  const connectionLabel =
+    wsStatus === 'reconnecting'
+      ? `Reconnecting (${Math.min(reconnectAttempt, MAX_RECONNECT_DISPLAY)}/${MAX_RECONNECT_DISPLAY})...`
+      : connection.label
 
   return (
     <div className="flex h-full min-h-screen bg-base">
@@ -82,9 +98,9 @@ export function Layout() {
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
           <div className="text-sm text-secondary">{breadcrumbFor(location.pathname)}</div>
           <div className="flex items-center gap-2">
-            <PulseRing color={wsStatus === 'connected' ? 'success' : 'danger'} pulse={wsStatus === 'connected'} />
-            <span className="text-xs text-secondary">
-              {wsStatus === 'connected' ? 'Live' : 'Offline'}
+            <PulseRing color={connection.color} pulse={connection.pulse} />
+            <span className="text-xs" style={{ color: connection.textColor }}>
+              {connectionLabel}
             </span>
           </div>
         </header>

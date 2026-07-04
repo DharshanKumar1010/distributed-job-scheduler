@@ -20,9 +20,11 @@ from app.models.job import Job, JobStatus
 from app.models.job_dependency import JobDependency
 from app.models.job_execution import JobExecution
 from app.models.job_log import JobLog, LogLevel
+from app.models.project import Project
 from app.models.queue import Queue
 from app.models.worker import Worker, WorkerHeartbeat, WorkerStatus
-from app.websocket.events import publish_event
+from app.services import queue_service
+from app.websocket.publisher import publish_event
 from app.worker.retry import compute_next_run
 
 logger = logging.getLogger("worker")
@@ -81,6 +83,7 @@ class JobWorker:
     def __init__(self, queue_id: uuid.UUID):
         self.queue_id = queue_id
         self.worker_id: uuid.UUID | None = None
+        self.org_id: uuid.UUID | None = None
         self.hostname = socket.gethostname()
         self.pid = os.getpid()
         self.active_tasks: dict[uuid.UUID, asyncio.Task] = {}
@@ -105,6 +108,11 @@ class JobWorker:
             queue = await db.get(Queue, self.queue_id)
             if queue is None:
                 raise RuntimeError(f"Queue {self.queue_id} does not exist")
+
+            project = await db.get(Project, queue.project_id)
+            if project is None:
+                raise RuntimeError(f"Project {queue.project_id} does not exist")
+            self.org_id = project.org_id
 
             worker = Worker(
                 queue_id=self.queue_id,
@@ -211,6 +219,19 @@ class JobWorker:
 
         job_row = dict(row)
         job_id = job_row["id"]
+
+        await self._publish_event(
+            "job.claimed",
+            {
+                "job_id": str(job_id),
+                "name": job_row["name"],
+                "queue_id": str(job_row["queue_id"]),
+                "worker_id": str(self.worker_id),
+                "attempts": job_row["attempts"],
+            },
+        )
+        await self._publish_queue_stats(job_row["queue_id"])
+
         task = asyncio.create_task(self._execute_job(job_row))
         self.active_tasks[job_id] = task
         task.add_done_callback(lambda _t, jid=job_id: asyncio.create_task(self._on_job_task_done(jid)))
@@ -235,7 +256,6 @@ class JobWorker:
     async def _execute_job(self, job_row: dict) -> None:
         job_id = job_row["id"]
         attempt_number = job_row["attempts"]
-        job_state = dict(job_row)
 
         started_at = datetime.now(timezone.utc)
         async with AsyncSessionLocal() as db:
@@ -256,8 +276,17 @@ class JobWorker:
             await db.refresh(execution)
             execution_id = execution.id
 
-        job_state.update(status=JobStatus.running, started_at=started_at)
-        await self._publish_event("job.updated", job_state)
+        await self._publish_event(
+            "job.running",
+            {
+                "job_id": str(job_id),
+                "name": job_row["name"],
+                "queue_id": str(job_row["queue_id"]),
+                "worker_id": str(self.worker_id),
+                "started_at": started_at.isoformat(),
+            },
+        )
+        await self._publish_queue_stats(job_row["queue_id"])
 
         error: Exception | None = None
         tb: str | None = None
@@ -272,13 +301,23 @@ class JobWorker:
 
         if error is None:
             await self._finish_success(job_id, execution_id, completed_at, duration_ms)
-            job_state.update(status=JobStatus.completed, completed_at=completed_at, result={"success": True})
             await self._unblock_dependents(job_id)
-            await self._publish_event("job.completed", job_state)
+            await self._publish_event(
+                "job.completed",
+                {
+                    "job_id": str(job_id),
+                    "name": job_row["name"],
+                    "queue_id": str(job_row["queue_id"]),
+                    "duration_ms": duration_ms,
+                    "attempts": attempt_number,
+                },
+            )
         else:
             await self._finish_failure(
                 job_row, execution_id, completed_at, duration_ms, attempt_number, error, tb
             )
+
+        await self._publish_queue_stats(job_row["queue_id"])
 
     async def _finish_success(
         self,
@@ -320,7 +359,6 @@ class JobWorker:
         tb: str | None,
     ) -> None:
         job_id = job_row["id"]
-        job_state = dict(job_row)
 
         async with AsyncSessionLocal() as db:
             db.add(
@@ -345,7 +383,10 @@ class JobWorker:
                 )
             )
 
-            if attempt_number < job_row["max_attempts"]:
+            will_retry = attempt_number < job_row["max_attempts"]
+            next_run: datetime | None = None
+
+            if will_retry:
                 next_run = compute_next_run(
                     job_row["retry_strategy"],
                     job_row["base_delay_seconds"],
@@ -363,15 +404,6 @@ class JobWorker:
                         error_traceback=tb,
                     )
                 )
-                await db.commit()
-
-                job_state.update(
-                    status=JobStatus.queued,
-                    scheduled_at=next_run,
-                    worker_id=None,
-                    error_message=str(error),
-                )
-                await self._publish_event("job.updated", job_state)
             else:
                 await db.execute(
                     update(Job)
@@ -393,10 +425,34 @@ class JobWorker:
                         last_traceback=tb,
                     )
                 )
-                await db.commit()
 
-                job_state.update(status=JobStatus.dead, failed_at=completed_at, error_message=str(error))
-                await self._publish_event("job.dead", job_state)
+            await db.commit()
+
+        await self._publish_event(
+            "job.failed",
+            {
+                "job_id": str(job_id),
+                "name": job_row["name"],
+                "queue_id": str(job_row["queue_id"]),
+                "error_message": str(error),
+                "attempts": attempt_number,
+                "max_attempts": job_row["max_attempts"],
+                "next_retry_at": next_run.isoformat() if next_run else None,
+                "will_retry": will_retry,
+            },
+        )
+
+        if not will_retry:
+            await self._publish_event(
+                "job.dead",
+                {
+                    "job_id": str(job_id),
+                    "name": job_row["name"],
+                    "queue_id": str(job_row["queue_id"]),
+                    "total_attempts": attempt_number,
+                    "last_error": str(error),
+                },
+            )
 
     async def _unblock_dependents(self, completed_job_id: uuid.UUID) -> None:
         async with AsyncSessionLocal() as db:
@@ -419,6 +475,21 @@ class JobWorker:
                     job.status = JobStatus.queued
 
             await db.commit()
+
+    async def _publish_queue_stats(self, queue_id: uuid.UUID) -> None:
+        async with AsyncSessionLocal() as db:
+            pending, running, failed, _throughput = await queue_service.get_stats_for_queue(
+                db, queue_id
+            )
+        await self._publish_event(
+            "queue.stats",
+            {
+                "queue_id": str(queue_id),
+                "pending_count": pending,
+                "running_count": running,
+                "failed_count": failed,
+            },
+        )
 
     # ------------------------------------------------------------------ #
     # Heartbeat loop
@@ -468,15 +539,28 @@ class JobWorker:
             )
             await db.commit()
 
+        await self._publish_event(
+            "worker.heartbeat",
+            {
+                "worker_id": str(self.worker_id),
+                "hostname": self.hostname,
+                "queue_id": str(self.queue_id),
+                "cpu_pct": cpu_pct,
+                "mem_pct": mem_pct,
+                "active_jobs": len(self.active_tasks),
+                "max_concurrency": settings.WORKER_CONCURRENCY,
+            },
+        )
+
     # ------------------------------------------------------------------ #
     # Misc
     # ------------------------------------------------------------------ #
 
     async def _publish_event(self, event: str, data: dict) -> None:
-        if self.redis is None:
+        if self.redis is None or self.org_id is None:
             return
         try:
-            await publish_event(self.redis, event, data)
+            await publish_event(self.redis, self.org_id, event, data)
         except Exception:
             logger.exception("Failed to publish %s event", event)
 

@@ -9,8 +9,10 @@ from sqlalchemy import select, update
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.job import Job, JobStatus
+from app.models.project import Project
+from app.models.queue import Queue
 from app.models.worker import Worker, WorkerStatus
-from app.websocket.events import publish_event
+from app.websocket.publisher import publish_event
 
 logger = logging.getLogger("reaper")
 
@@ -27,6 +29,7 @@ async def reap_once(redis_client: Redis | None = None) -> list[uuid.UUID]:
     """
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=STALE_WORKER_THRESHOLD_SECONDS)
     reaped_worker_ids: list[uuid.UUID] = []
+    reaped_worker_orgs: dict[uuid.UUID, uuid.UUID] = {}
 
     async with AsyncSessionLocal() as db:
         stale_workers = (
@@ -48,6 +51,14 @@ async def reap_once(redis_client: Redis | None = None) -> list[uuid.UUID]:
             )
             reaped_worker_ids.append(worker.id)
 
+            org_id = await db.scalar(
+                select(Project.org_id)
+                .join(Queue, Queue.project_id == Project.id)
+                .where(Queue.id == worker.queue_id)
+            )
+            if org_id is not None:
+                reaped_worker_orgs[worker.id] = org_id
+
         await db.commit()
 
     if reaped_worker_ids:
@@ -55,8 +66,13 @@ async def reap_once(redis_client: Redis | None = None) -> list[uuid.UUID]:
 
     if redis_client is not None:
         for worker_id in reaped_worker_ids:
+            org_id = reaped_worker_orgs.get(worker_id)
+            if org_id is None:
+                continue
             try:
-                await publish_event(redis_client, "worker.disconnected", {"worker_id": str(worker_id)})
+                await publish_event(
+                    redis_client, org_id, "worker.disconnected", {"worker_id": str(worker_id)}
+                )
             except Exception:
                 logger.exception("Failed to publish worker.disconnected for %s", worker_id)
 

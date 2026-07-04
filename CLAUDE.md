@@ -193,7 +193,7 @@ ANTHROPIC_API_KEY=sk-...
 - [x] Phase 4 — Worker process (claim, execute, heartbeat, graceful shutdown)
 - [x] Phase 5 — Retries + DLQ + Reaper
 - [x] Phase 6 — Dashboard (React)
-- [ ] Phase 7 — WebSocket live updates
+- [x] Phase 7 — WebSocket live updates
 - [ ] Phase 8 — Workflow dependencies (DAG)
 - [ ] Phase 9 — Rate limiting + distributed locking
 - [ ] Phase 10 — Queue sharding
