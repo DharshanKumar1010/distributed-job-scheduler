@@ -1,0 +1,16 @@
+fastapi==0.111.0
+uvicorn[standard]
+sqlalchemy[asyncio]==2.0.30
+asyncpg
+alembic
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+redis[asyncio]
+croniter
+httpx
+pytest
+pytest-asyncio
+pytest-httpx
+anthropic
+psutil
