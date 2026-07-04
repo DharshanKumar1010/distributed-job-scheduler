@@ -186,8 +186,8 @@ ANTHROPIC_API_KEY=sk-...
 
 ## Completed phases (update this as you finish each one)
 
-- [ ] Phase 0 — Scaffold + Docker + CLAUDE.md
-- [ ] Phase 1 — Schema + Alembic migrations
+- [x] Phase 0 — Scaffold + Docker + CLAUDE.md
+- [x] Phase 1 — Schema + Alembic migrations
 - [ ] Phase 2 — Auth + Orgs + Projects + Queues
 - [ ] Phase 3 — Job submission API (all 5 job types)
 - [ ] Phase 4 — Worker process (claim, execute, heartbeat, graceful shutdown)
