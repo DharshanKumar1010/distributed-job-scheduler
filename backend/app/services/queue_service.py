@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import APIError
 from app.models.job import Job, JobStatus
+from app.models.project import Project
 from app.models.queue import Queue
 from app.models.retry_policy import RetryPolicy
 
@@ -64,6 +65,17 @@ async def _get_queue_or_404(
     if require_active:
         conditions.append(Queue.is_active.is_(True))
     queue = await db.scalar(select(Queue).where(*conditions))
+    if queue is None:
+        raise APIError(404, "QUEUE_NOT_FOUND", "Queue not found")
+    return queue
+
+
+async def get_queue_for_org(db: AsyncSession, org_id: uuid.UUID, queue_id: uuid.UUID) -> Queue:
+    queue = await db.scalar(
+        select(Queue)
+        .join(Project, Project.id == Queue.project_id)
+        .where(Queue.id == queue_id, Project.org_id == org_id, Queue.is_active.is_(True))
+    )
     if queue is None:
         raise APIError(404, "QUEUE_NOT_FOUND", "Queue not found")
     return queue
