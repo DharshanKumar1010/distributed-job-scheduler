@@ -1,4 +1,7 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { forceOffline } from '../api/workers'
 import { useWorker } from '../hooks/useWorkers'
+import { usePermissions } from '../hooks/usePermissions'
 import { formatRelativeAge, truncateId } from '../lib/format'
 import { useLiveStatsStore } from '../store/liveStatsStore'
 import type { Worker } from '../types'
@@ -28,6 +31,15 @@ interface WorkerCardProps {
 
 export function WorkerCard({ worker, queueName }: WorkerCardProps) {
   const { data: detail } = useWorker(worker.id)
+  const { can } = usePermissions()
+  const queryClient = useQueryClient()
+  const forceOfflineMutation = useMutation({
+    mutationFn: () => forceOffline(worker.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workers'] })
+      queryClient.invalidateQueries({ queryKey: ['worker', worker.id] })
+    },
+  })
   const liveStatus = useLiveStatsStore((s) => s.workerStatusById[worker.id])
   const current = detail ?? worker
   // worker.heartbeat/connected/disconnected events patch liveStatsStore, not
@@ -80,6 +92,21 @@ export function WorkerCard({ worker, queueName }: WorkerCardProps) {
       <div className="mt-1 font-mono text-xs text-mono">
         {current.last_seen ? `seen ${formatRelativeAge(current.last_seen)}` : 'never seen'}
       </div>
+
+      {can('worker:force_offline') && status !== 'offline' && (
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(`Force worker "${current.hostname}" offline?`)) {
+              forceOfflineMutation.mutate()
+            }
+          }}
+          disabled={forceOfflineMutation.isPending}
+          className="mt-3 w-full rounded-md border border-border py-1.5 text-xs text-danger transition-colors hover:bg-elevated disabled:opacity-50"
+        >
+          Force Offline
+        </button>
+      )}
     </div>
   )
 }

@@ -6,8 +6,9 @@ import { JsonViewer } from '../components/JsonViewer'
 import { PageHeader } from '../components/PageHeader'
 import { Skeleton } from '../components/Skeleton'
 import { StatusBadge } from '../components/StatusBadge'
-import { useJobDependencies } from '../hooks/useDependencies'
+import { useCreateWorkflow, useJobDependencies } from '../hooks/useDependencies'
 import { useJob, useJobs } from '../hooks/useJobs'
+import { usePermissions } from '../hooks/usePermissions'
 import { useDefaultProject } from '../hooks/useProject'
 import { useQueues } from '../hooks/useQueue'
 import { useLiveStore } from '../store/liveStore'
@@ -154,10 +155,83 @@ function NodeDetailPanel({ jobId }: { jobId: string }) {
   )
 }
 
+const WORKFLOW_TEMPLATE = `{
+  "name": "my-workflow",
+  "jobs": [
+    { "ref": "step-a", "name": "step-a", "queue_id": "REPLACE_WITH_QUEUE_ID", "payload": {} },
+    { "ref": "step-b", "name": "step-b", "queue_id": "REPLACE_WITH_QUEUE_ID", "payload": {}, "depends_on": ["step-a"] }
+  ]
+}`
+
+function CreateWorkflowForm() {
+  const [open, setOpen] = useState(false)
+  const [json, setJson] = useState(WORKFLOW_TEMPLATE)
+  const [error, setError] = useState<string | null>(null)
+  const mutation = useCreateWorkflow()
+
+  const handleSubmit = () => {
+    setError(null)
+    try {
+      const payload = JSON.parse(json)
+      mutation.mutate(payload, {
+        onSuccess: () => setOpen(false),
+        onError: () => setError('Failed to create workflow - check the payload shape'),
+      })
+    } catch {
+      setError('Invalid JSON')
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+      >
+        Create Workflow
+      </button>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+      <div className="w-[520px] rounded-lg border border-border bg-card p-5">
+        <div className="mb-3 text-sm font-medium text-primary">Create Workflow</div>
+        <textarea
+          value={json}
+          onChange={(e) => setJson(e.target.value)}
+          rows={12}
+          className="w-full rounded-md border border-border bg-elevated p-3 font-mono text-xs text-primary outline-none focus:shadow-[0_0_0_2px_var(--accent-glow)]"
+        />
+        {error && <div className="mt-2 text-xs text-danger">{error}</div>}
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="rounded-md border border-border px-3 py-1.5 text-sm text-secondary transition-colors hover:bg-elevated"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={mutation.isPending}
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {mutation.isPending ? 'Creating…' : 'Create'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function WorkflowPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const rootJobId = searchParams.get('job') ?? undefined
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const { can } = usePermissions()
 
   const { data: project } = useDefaultProject()
   const { data: queues } = useQueues(project?.id)
@@ -184,7 +258,11 @@ export function WorkflowPage() {
 
   return (
     <div>
-      <PageHeader title="Workflows" description="Visualize job dependency graphs (DAGs) live" />
+      <PageHeader
+        title="Workflows"
+        description="Visualize job dependency graphs (DAGs) live"
+        actions={can('workflow:create') ? <CreateWorkflowForm /> : undefined}
+      />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <select

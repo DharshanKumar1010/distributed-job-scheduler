@@ -3,7 +3,8 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import ensure_same_org, get_current_user, get_db
+from app.auth.permissions import Permission
+from app.dependencies import ensure_same_org, get_db, require_permission
 from app.models.user import User
 from app.schemas.common import DataResponse, PaginatedResponse, PaginationMeta
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
@@ -17,7 +18,7 @@ async def list_projects(
     org_id: uuid.UUID,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PROJECT_READ)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
@@ -34,7 +35,7 @@ async def list_projects(
 async def create_project(
     org_id: uuid.UUID,
     payload: ProjectCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PROJECT_CREATE)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
@@ -48,7 +49,7 @@ async def create_project(
 async def get_project(
     org_id: uuid.UUID,
     project_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PROJECT_READ)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
@@ -61,7 +62,7 @@ async def update_project(
     org_id: uuid.UUID,
     project_id: uuid.UUID,
     payload: ProjectUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PROJECT_UPDATE)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
@@ -75,7 +76,7 @@ async def update_project(
 async def delete_project(
     org_id: uuid.UUID,
     project_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PROJECT_DELETE)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)

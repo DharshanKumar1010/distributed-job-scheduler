@@ -1,13 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { cancelJob, retryJob } from '../api/jobs'
+import { cancelJob, createJob, retryJob } from '../api/jobs'
 import { updateQueue } from '../api/queues'
 import { ErrorState } from '../components/ErrorState'
 import { PageHeader } from '../components/PageHeader'
 import { ShardDistribution } from '../components/ShardDistribution'
 import { Skeleton } from '../components/Skeleton'
 import { StatusBadge } from '../components/StatusBadge'
+import { usePermissions } from '../hooks/usePermissions'
 import { useJobs } from '../hooks/useJobs'
 import { useDefaultProject } from '../hooks/useProject'
 import { useQueue } from '../hooks/useQueue'
@@ -23,13 +24,14 @@ const fieldInputClass =
   'w-full rounded-md border border-border bg-elevated px-3 py-2 text-sm text-primary outline-none transition-shadow focus:shadow-[0_0_0_2px_var(--accent-glow)]'
 
 function JobRowActions({ job }: { job: Job }) {
+  const { can } = usePermissions()
   const queryClient = useQueryClient()
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['jobs', job.queue_id] })
 
   const cancelMutation = useMutation({ mutationFn: () => cancelJob(job.id), onSuccess: invalidate })
   const retryMutation = useMutation({ mutationFn: () => retryJob(job.id), onSuccess: invalidate })
 
-  if (CANCELLABLE.has(job.status)) {
+  if (CANCELLABLE.has(job.status) && can('job:cancel')) {
     return (
       <button
         type="button"
@@ -45,7 +47,7 @@ function JobRowActions({ job }: { job: Job }) {
     )
   }
 
-  if (RETRYABLE.has(job.status)) {
+  if (RETRYABLE.has(job.status) && can('job:retry')) {
     return (
       <button
         type="button"
@@ -64,10 +66,69 @@ function JobRowActions({ job }: { job: Job }) {
   return <span className="text-xs text-secondary">—</span>
 }
 
+function SubmitJobForm({ queueId }: { queueId: string }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: () => createJob(queueId, { name, payload: {}, job_type: 'immediate' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jobs', queueId] })
+      setName('')
+      setOpen(false)
+    },
+  })
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    if (name.trim()) mutation.mutate()
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+      >
+        Submit Job
+      </button>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex items-center gap-2">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Job name"
+        className="rounded-md border border-border bg-elevated px-3 py-1.5 text-sm text-primary outline-none focus:shadow-[0_0_0_2px_var(--accent-glow)]"
+      />
+      <button
+        type="submit"
+        disabled={mutation.isPending || !name.trim()}
+        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        {mutation.isPending ? 'Submitting…' : 'Submit'}
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="rounded-md border border-border px-3 py-1.5 text-sm text-secondary transition-colors hover:bg-elevated"
+      >
+        Cancel
+      </button>
+    </form>
+  )
+}
+
 export function QueueDetailPage() {
   const { queueId } = useParams<{ queueId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { can } = usePermissions()
 
   const { data: project } = useDefaultProject()
   const { data: queue, isLoading, isError, refetch } = useQueue(project?.id, queueId)
@@ -166,7 +227,11 @@ export function QueueDetailPage() {
 
   return (
     <div>
-      <PageHeader title={queue.name} description={queue.description ?? undefined} />
+      <PageHeader
+        title={queue.name}
+        description={queue.description ?? undefined}
+        actions={can('job:create') ? <SubmitJobForm queueId={queueId as string} /> : undefined}
+      />
 
       <div className="flex gap-6">
         <div className="w-[65%] overflow-hidden rounded-lg border border-border bg-card">
@@ -230,46 +295,67 @@ export function QueueDetailPage() {
         <div className="w-[35%] rounded-lg border border-border bg-card p-5">
           <div className="mb-4 text-xs uppercase tracking-widest text-secondary">Configuration</div>
 
+          {!can('queue:update') && (
+            <div className="mb-4 text-xs text-secondary">
+              Contact an admin to change these settings.
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <label className="mb-1.5 block text-xs text-secondary">Concurrency limit</label>
-              <input
-                type="number"
-                min={1}
-                value={concurrencyLimit}
-                onChange={(e) => setConcurrencyLimit(Number(e.target.value))}
-                className={fieldInputClass}
-              />
+              {can('queue:update') ? (
+                <input
+                  type="number"
+                  min={1}
+                  value={concurrencyLimit}
+                  onChange={(e) => setConcurrencyLimit(Number(e.target.value))}
+                  className={fieldInputClass}
+                />
+              ) : (
+                <div className="text-sm text-primary">{queue.concurrency_limit}</div>
+              )}
             </div>
 
             <div>
               <label className="mb-1.5 block text-xs text-secondary">Priority</label>
-              <input
-                type="number"
-                min={0}
-                max={10}
-                value={priority}
-                onChange={(e) => setPriority(Number(e.target.value))}
-                className={fieldInputClass}
-              />
+              {can('queue:update') ? (
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  value={priority}
+                  onChange={(e) => setPriority(Number(e.target.value))}
+                  className={fieldInputClass}
+                />
+              ) : (
+                <div className="text-sm text-primary">{queue.priority}</div>
+              )}
             </div>
 
             <div>
               <label className="mb-1.5 block text-xs text-secondary">Retry policy</label>
-              <select
-                value={retryPolicyId}
-                onChange={(e) => setRetryPolicyId(e.target.value)}
-                className={fieldInputClass}
-              >
-                <option value="">None</option>
-                {retryPolicies?.map((policy) => (
-                  <option key={policy.id} value={policy.id}>
-                    {policy.name}
-                  </option>
-                ))}
-              </select>
+              {can('queue:update') ? (
+                <select
+                  value={retryPolicyId}
+                  onChange={(e) => setRetryPolicyId(e.target.value)}
+                  className={fieldInputClass}
+                >
+                  <option value="">None</option>
+                  {retryPolicies?.map((policy) => (
+                    <option key={policy.id} value={policy.id}>
+                      {policy.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="text-sm text-primary">
+                  {retryPolicies?.find((p) => p.id === queue.retry_policy_id)?.name ?? 'None'}
+                </div>
+              )}
             </div>
 
+            {can('queue:configure') && (
             <div className="border-t border-border pt-4">
               <div className="flex items-center justify-between">
                 <label className="text-xs text-secondary">Enable Rate Limiting</label>
@@ -335,7 +421,9 @@ export function QueueDetailPage() {
                 </div>
               )}
             </div>
+            )}
 
+            {can('queue:configure') && (
             <div className="border-t border-border pt-4">
               <label className="mb-1.5 block text-xs text-secondary">Shard Count</label>
               <input
@@ -366,8 +454,9 @@ export function QueueDetailPage() {
                 )}
               </button>
             </div>
+            )}
 
-            {isDirty && (
+            {can('queue:update') && isDirty && (
               <button
                 type="button"
                 onClick={() => saveMutation.mutate()}

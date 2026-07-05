@@ -197,5 +197,5 @@ ANTHROPIC_API_KEY=sk-...
 - [x] Phase 8 — Workflow dependencies (DAG)
 - [x] Phase 9 — Rate limiting + distributed locking
 - [x] Phase 10 — Queue sharding
-- [ ] Phase 11 — RBAC
+- [x] Phase 11 — RBAC
 - [ ] Phase 12 — AI failure summaries

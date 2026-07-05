@@ -63,6 +63,23 @@ export interface TokenResponse {
   user: User
 }
 
+export interface PermissionsResponse {
+  role: string
+  permissions: string[]
+  cannot_do: string[]
+}
+
+export interface UserInviteRequest {
+  email: string
+  full_name?: string
+  role: UserRole
+}
+
+export interface UserInviteResponse {
+  user: User
+  temporary_password: string
+}
+
 // ---- Organization / Project ----
 
 export interface Organization {

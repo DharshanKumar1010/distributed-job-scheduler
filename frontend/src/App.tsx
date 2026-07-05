@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage'
 import { QueueDetailPage } from './pages/QueueDetailPage'
 import { QueuesPage } from './pages/QueuesPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { SettingsPage } from './pages/SettingsPage'
 import { WorkersPage } from './pages/WorkersPage'
 import { WorkflowPage } from './pages/WorkflowPage'
 import { useAuthStore } from './store/authStore'
@@ -39,6 +40,7 @@ function App() {
           <Route path="/workers" element={<WorkersPage />} />
           <Route path="/workflows" element={<WorkflowPage />} />
           <Route path="/dlq" element={<DLQPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

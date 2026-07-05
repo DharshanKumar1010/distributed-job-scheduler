@@ -5,7 +5,8 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db, get_redis
+from app.auth.permissions import Permission
+from app.dependencies import get_db, get_redis, require_permission
 from app.models.user import User
 from app.models.worker import Worker
 from app.schemas.common import DataResponse
@@ -20,7 +21,7 @@ router = APIRouter(tags=["shards"])
 @router.get("/queues/{queue_id}/shards", response_model=DataResponse[ShardDistributionOut])
 async def get_shards(
     queue_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.QUEUE_READ)),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
@@ -62,7 +63,7 @@ async def get_shards(
 @router.post("/queues/{queue_id}/shards/rebalance", response_model=DataResponse[RebalanceResult])
 async def rebalance_shards(
     queue_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.QUEUE_CONFIGURE)),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):

@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, Query, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db, get_redis
+from app.auth.permissions import Permission
+from app.dependencies import get_db, get_redis, require_permission
 from app.models.queue import Queue
 from app.models.user import User
 from app.schemas.common import DataResponse, PaginatedResponse, PaginationMeta
@@ -65,7 +66,7 @@ async def list_queues(
     project_id: uuid.UUID,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.QUEUE_READ)),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
@@ -83,7 +84,7 @@ async def list_queues(
 async def create_queue(
     project_id: uuid.UUID,
     payload: QueueCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.QUEUE_CREATE)),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
@@ -97,7 +98,7 @@ async def create_queue(
 async def get_queue(
     project_id: uuid.UUID,
     queue_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.QUEUE_READ)),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
@@ -111,7 +112,7 @@ async def update_queue(
     project_id: uuid.UUID,
     queue_id: uuid.UUID,
     payload: QueueUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.QUEUE_UPDATE)),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
@@ -140,7 +141,7 @@ async def update_queue(
 async def delete_queue(
     project_id: uuid.UUID,
     queue_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.QUEUE_DELETE)),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
@@ -154,7 +155,7 @@ async def delete_queue(
 async def pause_queue(
     project_id: uuid.UUID,
     queue_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.QUEUE_PAUSE)),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
@@ -168,7 +169,7 @@ async def pause_queue(
 async def resume_queue(
     project_id: uuid.UUID,
     queue_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.QUEUE_PAUSE)),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):

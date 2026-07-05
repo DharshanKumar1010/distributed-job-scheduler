@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { register as registerRequest } from '../api/auth'
+import { getPermissions, register as registerRequest } from '../api/auth'
 import { getErrorMessage } from '../api/client'
 import { Logo } from '../components/Logo'
 import { useAuthStore } from '../store/authStore'
@@ -20,6 +20,7 @@ function slugify(value: string): string {
 export function RegisterPage() {
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.login)
+  const setPermissions = useAuthStore((s) => s.setPermissions)
   const [orgName, setOrgName] = useState('')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -28,8 +29,14 @@ export function RegisterPage() {
 
   const mutation = useMutation({
     mutationFn: registerRequest,
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       setAuth(result.access_token, result.user)
+      try {
+        const perms = await getPermissions()
+        setPermissions(perms.permissions, perms.role, perms.cannot_do)
+      } catch {
+        // non-fatal - UI just won't have granular gating until next fetch
+      }
       navigate('/dashboard')
     },
     onError: (error) => setFormError(getErrorMessage(error)),

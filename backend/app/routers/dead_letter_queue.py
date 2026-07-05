@@ -3,7 +3,8 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.auth.permissions import Permission
+from app.dependencies import get_db, require_permission
 from app.models.dead_letter_queue import DeadLetterQueueEntry
 from app.models.job import Job
 from app.models.user import User
@@ -40,7 +41,7 @@ async def list_dlq_entries(
     is_resolved: bool | None = Query(default=None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DLQ_READ)),
     db: AsyncSession = Depends(get_db),
 ):
     rows, total = await dead_letter_queue_service.list_dlq_entries(
@@ -55,7 +56,7 @@ async def list_dlq_entries(
 @router.post("/{entry_id}/resolve", response_model=DataResponse[DeadLetterQueueEntryOut])
 async def resolve_dlq_entry(
     entry_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DLQ_RESOLVE)),
     db: AsyncSession = Depends(get_db),
 ):
     entry, job = await dead_letter_queue_service.resolve_dlq_entry(
@@ -67,7 +68,7 @@ async def resolve_dlq_entry(
 @router.post("/{entry_id}/replay", response_model=DataResponse[JobOut])
 async def replay_dlq_entry(
     entry_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DLQ_REPLAY)),
     db: AsyncSession = Depends(get_db),
 ):
     job = await dead_letter_queue_service.replay_dlq_entry(db, current_user.org_id, entry_id)

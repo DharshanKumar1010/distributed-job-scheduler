@@ -16,6 +16,26 @@ export async function getQueue(projectId: string, queueId: string): Promise<Queu
   return data.data
 }
 
+export interface QueueCreatePayload {
+  name: string
+  slug: string
+}
+
+export async function createQueue(projectId: string, payload: QueueCreatePayload): Promise<Queue> {
+  const { data } = await apiClient.post<DataResponse<Queue>>(
+    `/projects/${projectId}/queues`,
+    payload,
+  )
+  return data.data
+}
+
+export async function deleteQueue(projectId: string, queueId: string): Promise<Queue> {
+  const { data } = await apiClient.delete<DataResponse<Queue>>(
+    `/projects/${projectId}/queues/${queueId}`,
+  )
+  return data.data
+}
+
 export interface QueueUpdatePayload {
   name?: string
   description?: string | null

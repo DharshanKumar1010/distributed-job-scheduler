@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { login as loginRequest } from '../api/auth'
+import { getPermissions, login as loginRequest } from '../api/auth'
 import { getErrorMessage } from '../api/client'
 import { Logo } from '../components/Logo'
 import { useAuthStore } from '../store/authStore'
@@ -12,14 +12,21 @@ const inputClass =
 export function LoginPage() {
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.login)
+  const setPermissions = useAuthStore((s) => s.setPermissions)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
 
   const mutation = useMutation({
     mutationFn: loginRequest,
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       setAuth(result.access_token, result.user)
+      try {
+        const perms = await getPermissions()
+        setPermissions(perms.permissions, perms.role, perms.cannot_do)
+      } catch {
+        // non-fatal - UI just won't have granular gating until next fetch
+      }
       navigate('/dashboard')
     },
     onError: (error) => setFormError(getErrorMessage(error)),

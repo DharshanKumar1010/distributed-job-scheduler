@@ -20,3 +20,9 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
+class PermissionsOut(BaseModel):
+    role: str
+    permissions: list[str]
+    cannot_do: list[str]

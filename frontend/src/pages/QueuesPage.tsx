@@ -1,16 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Settings } from 'lucide-react'
+import { Settings, Trash2 } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { pauseQueue, resumeQueue } from '../api/queues'
+import { createQueue, deleteQueue, pauseQueue, resumeQueue } from '../api/queues'
 import { ErrorState } from '../components/ErrorState'
 import { PageHeader } from '../components/PageHeader'
 import { PulseRing } from '../components/PulseRing'
 import { Skeleton } from '../components/Skeleton'
+import { usePermissions } from '../hooks/usePermissions'
 import { useQueues } from '../hooks/useQueue'
 import { useDefaultProject } from '../hooks/useProject'
 import type { Queue } from '../types'
 
-function PauseToggle({ queue, projectId }: { queue: Queue; projectId: string }) {
+function PauseToggle({ queue, projectId, disabled }: { queue: Queue; projectId: string; disabled: boolean }) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
     mutationFn: () => (queue.is_paused ? resumeQueue(projectId, queue.id) : pauseQueue(projectId, queue.id)),
@@ -26,7 +28,7 @@ function PauseToggle({ queue, projectId }: { queue: Queue; projectId: string }) 
       type="button"
       role="switch"
       aria-checked={isActive}
-      disabled={mutation.isPending}
+      disabled={disabled || mutation.isPending}
       onClick={() => mutation.mutate()}
       className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50"
       style={{ backgroundColor: isActive ? 'var(--accent)' : 'var(--border)' }}
@@ -39,16 +41,93 @@ function PauseToggle({ queue, projectId }: { queue: Queue; projectId: string }) 
   )
 }
 
+function CreateQueueForm({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      createQueue(projectId, {
+        name,
+        slug: name
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, ''),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queues', projectId] })
+      setName('')
+      setOpen(false)
+    },
+  })
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    if (name.trim()) mutation.mutate()
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+      >
+        Create Queue
+      </button>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex items-center gap-2">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Queue name"
+        className="rounded-md border border-border bg-elevated px-3 py-1.5 text-sm text-primary outline-none focus:shadow-[0_0_0_2px_var(--accent-glow)]"
+      />
+      <button
+        type="submit"
+        disabled={mutation.isPending || !name.trim()}
+        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        {mutation.isPending ? 'Creating…' : 'Create'}
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="rounded-md border border-border px-3 py-1.5 text-sm text-secondary transition-colors hover:bg-elevated"
+      >
+        Cancel
+      </button>
+    </form>
+  )
+}
+
 export function QueuesPage() {
   const navigate = useNavigate()
+  const { can } = usePermissions()
   const { data: project, isLoading: projectLoading } = useDefaultProject()
   const { data: queues, isLoading, isError, refetch } = useQueues(project?.id)
+  const queryClient = useQueryClient()
+
+  const deleteMutation = useMutation({
+    mutationFn: (queueId: string) => deleteQueue(project!.id, queueId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['queues', project?.id] }),
+  })
 
   const loading = projectLoading || isLoading
 
   return (
     <div>
-      <PageHeader title="Queues" description="Manage job queues and their throughput" />
+      <PageHeader
+        title="Queues"
+        description="Manage job queues and their throughput"
+        actions={project && can('queue:create') ? <CreateQueueForm projectId={project.id} /> : undefined}
+      />
 
       {loading && (
         <div className="rounded-lg border border-border bg-card p-6">
@@ -92,15 +171,32 @@ export function QueuesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                      <PauseToggle queue={queue} projectId={project!.id} />
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/queues/${queue.id}`)}
-                        className="rounded-md p-1.5 text-secondary transition-colors hover:bg-base hover:text-primary"
-                        aria-label={`Configure ${queue.name}`}
-                      >
-                        <Settings size={16} />
-                      </button>
+                      <PauseToggle queue={queue} projectId={project!.id} disabled={!can('queue:pause')} />
+                      {can('queue:configure') && (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/queues/${queue.id}`)}
+                          className="rounded-md p-1.5 text-secondary transition-colors hover:bg-base hover:text-primary"
+                          aria-label={`Configure ${queue.name}`}
+                        >
+                          <Settings size={16} />
+                        </button>
+                      )}
+                      {can('queue:delete') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Delete queue "${queue.name}"?`)) {
+                              deleteMutation.mutate(queue.id)
+                            }
+                          }}
+                          disabled={deleteMutation.isPending}
+                          className="rounded-md p-1.5 text-secondary transition-colors hover:bg-base hover:text-danger disabled:opacity-50"
+                          aria-label={`Delete ${queue.name}`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

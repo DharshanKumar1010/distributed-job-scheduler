@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { DataResponse, TokenResponse, User } from '../types'
+import type { DataResponse, PermissionsResponse, TokenResponse, User } from '../types'
 
 export interface LoginRequest {
   email: string
@@ -26,5 +26,10 @@ export async function register(payload: RegisterRequest): Promise<TokenResponse>
 
 export async function fetchMe(): Promise<User> {
   const { data } = await apiClient.get<DataResponse<User>>('/auth/me')
+  return data.data
+}
+
+export async function getPermissions(): Promise<PermissionsResponse> {
+  const { data } = await apiClient.get<DataResponse<PermissionsResponse>>('/auth/permissions')
   return data.data
 }

@@ -11,6 +11,7 @@ import { Skeleton } from '../components/Skeleton'
 import { StatusBadge } from '../components/StatusBadge'
 import { useJobDependencies, useJobDependents } from '../hooks/useDependencies'
 import { useJob } from '../hooks/useJobs'
+import { usePermissions } from '../hooks/usePermissions'
 import { formatDateTime } from '../lib/format'
 import type { JobExecution } from '../types'
 
@@ -151,6 +152,7 @@ export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { can } = usePermissions()
   const { data: job, isLoading, isError, refetch } = useJob(jobId)
   const { data: graph } = useJobDependencies(jobId)
 
@@ -204,7 +206,7 @@ export function JobDetailPage() {
         description={`Queue ${job.queue_id}`}
         actions={
           <div className="flex gap-2">
-            {CANCELLABLE.has(job.status) && (
+            {CANCELLABLE.has(job.status) && can('job:cancel') && (
               <button
                 type="button"
                 onClick={() => cancelMutation.mutate()}
@@ -214,7 +216,7 @@ export function JobDetailPage() {
                 Cancel
               </button>
             )}
-            {RETRYABLE.has(job.status) && (
+            {RETRYABLE.has(job.status) && can('job:retry') && (
               <button
                 type="button"
                 onClick={() => retryMutation.mutate()}

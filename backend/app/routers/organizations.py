@@ -3,8 +3,9 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import ensure_same_org, get_current_user, get_db, require_role
-from app.models.user import User, UserRole
+from app.auth.permissions import Permission
+from app.dependencies import ensure_same_org, get_current_user, get_db, require_permission
+from app.models.user import User
 from app.schemas.common import DataResponse, PaginatedResponse, PaginationMeta
 from app.schemas.organization import OrganizationOut, OrganizationUpdate
 from app.schemas.user import UserInviteRequest, UserInviteResponse, UserOut, UserRoleUpdateRequest
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/orgs", tags=["organizations"])
 @router.get("/{org_id}", response_model=DataResponse[OrganizationOut])
 async def get_org(
     org_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.ORG_READ)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
@@ -28,7 +29,7 @@ async def get_org(
 async def update_org(
     org_id: uuid.UUID,
     payload: OrganizationUpdate,
-    current_user: User = Depends(require_role(UserRole.owner, UserRole.admin)),
+    current_user: User = Depends(require_permission(Permission.ORG_UPDATE)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
@@ -43,7 +44,7 @@ async def list_org_users(
     org_id: uuid.UUID,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.USER_READ)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
@@ -62,7 +63,7 @@ async def list_org_users(
 async def invite_user(
     org_id: uuid.UUID,
     payload: UserInviteRequest,
-    current_user: User = Depends(require_role(UserRole.owner, UserRole.admin)),
+    current_user: User = Depends(require_permission(Permission.USER_INVITE)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
@@ -79,9 +80,21 @@ async def update_user_role(
     org_id: uuid.UUID,
     user_id: uuid.UUID,
     payload: UserRoleUpdateRequest,
-    current_user: User = Depends(require_role(UserRole.owner, UserRole.admin)),
+    current_user: User = Depends(require_permission(Permission.USER_UPDATE_ROLE)),
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
     user = await organization_service.update_user_role(db, org_id, user_id, payload.role)
+    return DataResponse(data=UserOut.model_validate(user))
+
+
+@router.delete("/{org_id}/users/{user_id}", response_model=DataResponse[UserOut])
+async def remove_user(
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    current_user: User = Depends(require_permission(Permission.USER_REMOVE)),
+    db: AsyncSession = Depends(get_db),
+):
+    ensure_same_org(current_user, org_id)
+    user = await organization_service.remove_user(db, org_id, user_id, current_user.id)
     return DataResponse(data=UserOut.model_validate(user))

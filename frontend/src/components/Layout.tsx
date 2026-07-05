@@ -18,6 +18,19 @@ function DagIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth
   )
 }
 
+function GearIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor">
+      <circle cx="8" cy="8" r="2.25" strokeWidth={strokeWidth} />
+      <path
+        d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.1 3.9l-1.13 1.13M5.03 10.97 3.9 12.1M12.1 12.1l-1.13-1.13M5.03 5.03 3.9 3.9"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/queues', label: 'Queues', icon: ListTree },
@@ -34,6 +47,7 @@ function breadcrumbFor(pathname: string): string {
   if (pathname.startsWith('/workers')) return 'Workers'
   if (pathname.startsWith('/workflows')) return 'Workflows'
   if (pathname.startsWith('/dlq')) return 'Dead Letter Queue'
+  if (pathname.startsWith('/settings')) return 'Settings'
   return ''
 }
 
@@ -95,6 +109,25 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        <div className="border-t border-border px-3 py-3">
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 rounded-md border-l-2 px-3 py-2 text-sm transition-colors ${
+                isActive
+                  ? 'border-accent text-primary'
+                  : 'border-transparent text-secondary hover:text-primary'
+              }`
+            }
+            style={({ isActive }) => ({
+              backgroundColor: isActive ? 'var(--accent-glow)' : 'transparent',
+            })}
+          >
+            <GearIcon size={16} strokeWidth={1.75} />
+            Settings
+          </NavLink>
+        </div>
 
         <div className="border-t border-border px-4 py-4">
           <div className="truncate text-xs text-secondary">{user?.email}</div>

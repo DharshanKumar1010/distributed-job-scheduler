@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.permissions import ALL_PERMISSIONS, get_permissions_for_role
 from app.dependencies import create_access_token, get_current_user, get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import LoginRequest, PermissionsOut, RegisterRequest, TokenResponse
 from app.schemas.common import DataResponse
 from app.schemas.user import UserOut
 from app.services import auth_service
@@ -43,3 +44,11 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
 @router.get("/me", response_model=DataResponse[UserOut])
 async def me(current_user: User = Depends(get_current_user)):
     return DataResponse(data=UserOut.model_validate(current_user))
+
+
+@router.get("/permissions", response_model=DataResponse[PermissionsOut])
+async def get_permissions(current_user: User = Depends(get_current_user)):
+    role = current_user.role.value
+    granted = get_permissions_for_role(role)
+    cannot_do = sorted(ALL_PERMISSIONS - set(granted))
+    return DataResponse(data=PermissionsOut(role=role, permissions=granted, cannot_do=cannot_do))

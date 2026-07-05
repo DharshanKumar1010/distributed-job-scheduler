@@ -8,6 +8,7 @@ import { Skeleton } from '../components/Skeleton'
 import { StatusBadge } from '../components/StatusBadge'
 import { useDlqEntries } from '../hooks/useDlq'
 import { useDefaultProject } from '../hooks/useProject'
+import { usePermissions } from '../hooks/usePermissions'
 import { useQueues } from '../hooks/useQueue'
 import { formatDateTime, truncateId } from '../lib/format'
 import type { DeadLetterQueueEntry } from '../types'
@@ -19,6 +20,7 @@ function truncate(text: string, length: number): string {
 function DlqRow({ entry, queueName }: { entry: DeadLetterQueueEntry; queueName?: string }) {
   const [open, setOpen] = useState(false)
   const queryClient = useQueryClient()
+  const { can } = usePermissions()
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['dlq'] })
 
   const resolveMutation = useMutation({ mutationFn: () => resolveDlqEntry(entry.id), onSuccess: invalidate })
@@ -45,22 +47,26 @@ function DlqRow({ entry, queueName }: { entry: DeadLetterQueueEntry; queueName?:
         </td>
         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => replayMutation.mutate()}
-              disabled={replayMutation.isPending}
-              className="text-xs text-accent hover:underline disabled:opacity-50"
-            >
-              Replay
-            </button>
-            <button
-              type="button"
-              onClick={() => resolveMutation.mutate()}
-              disabled={entry.is_resolved || resolveMutation.isPending}
-              className="text-xs text-secondary hover:text-primary hover:underline disabled:opacity-50"
-            >
-              Resolve
-            </button>
+            {can('dlq:replay') && (
+              <button
+                type="button"
+                onClick={() => replayMutation.mutate()}
+                disabled={replayMutation.isPending}
+                className="text-xs text-accent hover:underline disabled:opacity-50"
+              >
+                Replay
+              </button>
+            )}
+            {can('dlq:resolve') && (
+              <button
+                type="button"
+                onClick={() => resolveMutation.mutate()}
+                disabled={entry.is_resolved || resolveMutation.isPending}
+                className="text-xs text-secondary hover:text-primary hover:underline disabled:opacity-50"
+              >
+                Resolve
+              </button>
+            )}
           </div>
         </td>
       </tr>

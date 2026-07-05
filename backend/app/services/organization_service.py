@@ -73,3 +73,17 @@ async def update_user_role(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+async def remove_user(
+    db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID, requesting_user_id: uuid.UUID
+) -> User:
+    if user_id == requesting_user_id:
+        raise APIError(400, "CANNOT_REMOVE_SELF", "You cannot remove your own account")
+    user = await db.scalar(select(User).where(User.id == user_id, User.org_id == org_id))
+    if user is None:
+        raise APIError(404, "USER_NOT_FOUND", "User not found")
+    user.is_active = False
+    await db.commit()
+    await db.refresh(user)
+    return user
