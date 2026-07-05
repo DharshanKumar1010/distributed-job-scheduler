@@ -21,6 +21,7 @@ from app.routers import (
     projects,
     queues,
     retry_policies,
+    shards,
     workers,
 )
 from app.websocket.hub import hub
@@ -65,6 +66,7 @@ app.include_router(queues.router)
 app.include_router(retry_policies.router)
 app.include_router(jobs.router)
 app.include_router(workers.router)
+app.include_router(shards.router)
 app.include_router(dead_letter_queue.router)
 app.include_router(websocket_router, prefix="/ws")
 

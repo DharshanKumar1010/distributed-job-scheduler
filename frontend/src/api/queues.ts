@@ -24,6 +24,7 @@ export interface QueueUpdatePayload {
   retry_policy_id?: string | null
   rate_limit_per_minute?: number | null
   rate_limit_burst?: number | null
+  shard_count?: number
 }
 
 export async function updateQueue(

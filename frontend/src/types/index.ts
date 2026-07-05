@@ -112,6 +112,33 @@ export interface RateLimitStatus {
   is_rate_limited: boolean
 }
 
+export interface ShardWorker {
+  worker_id: string
+  hostname: string
+  current_jobs: number
+}
+
+export interface Shard {
+  shard_id: number
+  workers: ShardWorker[]
+  pending_jobs: number
+  running_jobs: number
+}
+
+export type ShardRecommendation = 'optimal' | 'add_workers' | 'reduce_shards'
+
+export interface ShardDistribution {
+  shard_count: number
+  shards: Shard[]
+  unassigned_jobs: number
+  recommendation: ShardRecommendation
+}
+
+export interface RebalanceResult {
+  status: string
+  expected_completion_seconds: number
+}
+
 export interface Queue {
   id: string
   project_id: string
@@ -337,6 +364,7 @@ export type WsEventName =
   | 'worker.heartbeat'
   | 'queue.stats'
   | 'queue.rate_limited'
+  | 'queue.rebalancing'
 
 export interface WsEnvelope<T = unknown> {
   event: WsEventName
@@ -389,4 +417,9 @@ export interface WsQueueRateLimitedData {
   queue_id: string
   queue_name: string
   tokens_remaining: number
+}
+
+export interface WsQueueRebalancingData {
+  queue_id: string
+  queue_name: string
 }

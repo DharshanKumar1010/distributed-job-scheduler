@@ -13,6 +13,7 @@ import type {
   WsEnvelope,
   WsJobEventData,
   WsQueueRateLimitedData,
+  WsQueueRebalancingData,
   WsQueueStatsData,
   WsWorkerHeartbeatData,
 } from '../types'
@@ -163,6 +164,17 @@ function handleEnvelope(envelope: WsEnvelope): void {
           `Queue ${payload.queue_name} is rate limited — ${payload.tokens_remaining.toFixed(1)} tokens remaining`,
         )
       queryClient.invalidateQueries({ queryKey: ['queue', payload.queue_id] })
+      break
+    }
+    case 'queue.rebalancing': {
+      const payload = data as WsQueueRebalancingData
+      useToastStore
+        .getState()
+        .addToast(
+          'warning',
+          `Queue ${payload.queue_name} is rebalancing shards — workers will reassign within 15s`,
+        )
+      queryClient.invalidateQueries({ queryKey: ['shard-distribution', payload.queue_id] })
       break
     }
     default:

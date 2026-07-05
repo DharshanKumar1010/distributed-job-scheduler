@@ -4,6 +4,7 @@ import os
 import random
 import signal
 import socket
+import time
 import traceback
 import uuid
 from datetime import datetime, timezone
@@ -24,10 +25,13 @@ from app.models.queue import Queue
 from app.models.worker import Worker, WorkerHeartbeat, WorkerStatus
 from app.services import dependency_service, queue_service
 from app.websocket.publisher import publish_event
+from app.worker import shard
 from app.worker.rate_limit import check_token_bucket, queue_bucket_key
 from app.worker.retry import compute_next_run
 
 logger = logging.getLogger("worker")
+
+SHARD_REASSIGN_INTERVAL_SECONDS = 30
 
 # THE MOST IMPORTANT QUERY IN THE ENTIRE PROJECT. Do not "optimize" this into an
 # ORM SELECT-then-UPDATE — FOR UPDATE SKIP LOCKED is what makes claiming atomic
@@ -44,6 +48,31 @@ CLAIM_QUERY = text(
         WHERE queue_id = :queue_id
           AND status = 'queued'
           AND (scheduled_at IS NULL OR scheduled_at <= now())
+        ORDER BY priority DESC, created_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+    )
+    RETURNING *
+    """
+)
+
+# Same claim query, plus a shard filter. hashtext() % N can be negative in
+# Postgres (sign follows the dividend), so it's normalized into [0, N) before
+# comparing to :shard_id - otherwise roughly half of all jobs would never
+# match any shard.
+SHARD_CLAIM_QUERY = text(
+    """
+    UPDATE jobs
+    SET status = 'claimed',
+        worker_id = :worker_id,
+        claimed_at = now(),
+        attempts = attempts + 1
+    WHERE id = (
+        SELECT id FROM jobs
+        WHERE queue_id = :queue_id
+          AND status = 'queued'
+          AND (scheduled_at IS NULL OR scheduled_at <= now())
+          AND (((hashtext(id::text) % :shard_count) + :shard_count) % :shard_count) = :shard_id
         ORDER BY priority DESC, created_at ASC
         FOR UPDATE SKIP LOCKED
         LIMIT 1
@@ -90,6 +119,10 @@ class JobWorker:
         self.redis: Redis | None = None
         self._stopping = asyncio.Event()
         self._process = psutil.Process(self.pid)
+        self.shard_count = 1
+        self.assigned_shard = 0
+        self._shard_id_override: int | None = None
+        self._next_shard_refresh = 0.0
 
     # ------------------------------------------------------------------ #
     # Startup / shutdown
@@ -127,6 +160,26 @@ class JobWorker:
             await db.commit()
             await db.refresh(worker)
             self.worker_id = worker.id
+
+            self.shard_count = queue.shard_count
+            shard_env = os.environ.get("SHARD_ID")
+            if shard_env is not None:
+                self._shard_id_override = int(shard_env)
+                self.assigned_shard = self._shard_id_override % max(1, self.shard_count)
+            elif self.shard_count > 1:
+                self.assigned_shard = await shard.assign_shard(
+                    self.worker_id, self.queue_id, self.shard_count, db, self.redis
+                )
+            else:
+                self.assigned_shard = 0
+
+        logger.info(
+            "Worker %s claiming shard %d/%d of queue %s",
+            self.worker_id,
+            self.assigned_shard,
+            self.shard_count,
+            queue.name,
+        )
 
         logger.info("Worker %s started, watching queue %s", self.worker_id, self.queue_id)
         await self._publish_event(
@@ -208,9 +261,20 @@ class JobWorker:
             if len(self.active_tasks) >= min(queue.concurrency_limit, settings.WORKER_CONCURRENCY):
                 return
 
-            result = await db.execute(
-                CLAIM_QUERY, {"worker_id": self.worker_id, "queue_id": self.queue_id}
-            )
+            if self.shard_count > 1:
+                result = await db.execute(
+                    SHARD_CLAIM_QUERY,
+                    {
+                        "worker_id": self.worker_id,
+                        "queue_id": self.queue_id,
+                        "shard_count": self.shard_count,
+                        "shard_id": self.assigned_shard,
+                    },
+                )
+            else:
+                result = await db.execute(
+                    CLAIM_QUERY, {"worker_id": self.worker_id, "queue_id": self.queue_id}
+                )
             row = result.mappings().first()
             await db.commit()
 
@@ -520,7 +584,36 @@ class JobWorker:
             except asyncio.TimeoutError:
                 pass
 
+    async def _maybe_refresh_shard_assignment(self) -> None:
+        """Re-registers this worker in the queue's active-workers set every
+        SHARD_REASSIGN_INTERVAL_SECONDS, so shard assignments reshuffle
+        automatically as workers join/leave or shard_count changes - without
+        needing a restart. A worker pinned via SHARD_ID never reassigns.
+        """
+        now = time.monotonic()
+        if now < self._next_shard_refresh:
+            return
+        self._next_shard_refresh = now + SHARD_REASSIGN_INTERVAL_SECONDS
+
+        if self._shard_id_override is not None:
+            return
+
+        async with AsyncSessionLocal() as db:
+            queue = await db.get(Queue, self.queue_id)
+            if queue is None:
+                return
+            self.shard_count = queue.shard_count
+            if self.shard_count <= 1:
+                self.assigned_shard = 0
+                return
+            if self.redis is not None:
+                self.assigned_shard = await shard.assign_shard(
+                    self.worker_id, self.queue_id, self.shard_count, db, self.redis
+                )
+
     async def _send_heartbeat(self) -> None:
+        await self._maybe_refresh_shard_assignment()
+
         cpu_pct: float | None = None
         mem_pct: float | None = None
         try:

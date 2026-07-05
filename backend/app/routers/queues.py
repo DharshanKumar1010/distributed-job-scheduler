@@ -10,6 +10,8 @@ from app.models.user import User
 from app.schemas.common import DataResponse, PaginatedResponse, PaginationMeta
 from app.schemas.queue import QueueCreate, QueueOut, QueueStats, QueueUpdate, RateLimitStatus
 from app.services import project_service, queue_service
+from app.websocket.publisher import publish_event
+from app.worker import shard as shard_engine
 from app.worker.rate_limit import peek_token_bucket, queue_bucket_key
 
 router = APIRouter(prefix="/projects", tags=["queues"])
@@ -114,9 +116,22 @@ async def update_queue(
     redis: Redis = Depends(get_redis),
 ):
     await project_service.get_project(db, current_user.org_id, project_id)
+    old_row = await queue_service.get_queue_with_stats(db, project_id, queue_id)
+    old_shard_count = old_row[0].shard_count
+
     queue = await queue_service.update_queue(
         db, project_id, queue_id, payload.model_dump(exclude_unset=True)
     )
+
+    if queue.shard_count != old_shard_count:
+        await shard_engine.trigger_rebalance(redis, queue.id)
+        await publish_event(
+            redis,
+            current_user.org_id,
+            "queue.rebalancing",
+            {"queue_id": str(queue.id), "queue_name": queue.name},
+        )
+
     stats = await queue_service.get_stats_for_queue(db, queue.id)
     return DataResponse(data=await _to_queue_out(redis, queue, *stats))
 

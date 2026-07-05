@@ -47,7 +47,7 @@ class QueueCreate(BaseModel):
     priority: int = Field(default=5, ge=0, le=10)
     concurrency_limit: int = Field(default=10, ge=1)
     retry_policy_id: uuid.UUID | None = None
-    shard_count: int = Field(default=1, ge=1)
+    shard_count: int = Field(default=1, ge=1, le=64)
     rate_limit_per_minute: int | None = Field(default=None, ge=1)
     rate_limit_burst: int | None = Field(default=None, ge=1)
 
@@ -59,7 +59,7 @@ class QueueUpdate(BaseModel):
     priority: int | None = Field(default=None, ge=0, le=10)
     concurrency_limit: int | None = Field(default=None, ge=1)
     retry_policy_id: uuid.UUID | None = None
-    shard_count: int | None = Field(default=None, ge=1)
+    shard_count: int | None = Field(default=None, ge=1, le=64)
     is_active: bool | None = None
     rate_limit_per_minute: int | None = Field(default=None, ge=1)
     rate_limit_burst: int | None = Field(default=None, ge=1)

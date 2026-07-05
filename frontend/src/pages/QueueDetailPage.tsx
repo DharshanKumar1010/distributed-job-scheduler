@@ -5,12 +5,14 @@ import { cancelJob, retryJob } from '../api/jobs'
 import { updateQueue } from '../api/queues'
 import { ErrorState } from '../components/ErrorState'
 import { PageHeader } from '../components/PageHeader'
+import { ShardDistribution } from '../components/ShardDistribution'
 import { Skeleton } from '../components/Skeleton'
 import { StatusBadge } from '../components/StatusBadge'
 import { useJobs } from '../hooks/useJobs'
 import { useDefaultProject } from '../hooks/useProject'
 import { useQueue } from '../hooks/useQueue'
 import { useRetryPolicies } from '../hooks/useRetryPolicies'
+import { useRebalanceShards } from '../hooks/useShards'
 import { formatRelativeAge, truncateId } from '../lib/format'
 import type { Job } from '../types'
 
@@ -78,6 +80,8 @@ export function QueueDetailPage() {
   const [rateLimitEnabled, setRateLimitEnabled] = useState(false)
   const [rateLimitPerMinute, setRateLimitPerMinute] = useState(60)
   const [rateLimitBurst, setRateLimitBurst] = useState(60)
+  const [shardCount, setShardCount] = useState(1)
+  const [rebalanceCountdown, setRebalanceCountdown] = useState<number | null>(null)
 
   useEffect(() => {
     if (queue) {
@@ -87,8 +91,19 @@ export function QueueDetailPage() {
       setRateLimitEnabled(queue.rate_limit_per_minute != null)
       setRateLimitPerMinute(queue.rate_limit_per_minute ?? 60)
       setRateLimitBurst(queue.rate_limit_burst ?? queue.rate_limit_per_minute ?? 60)
+      setShardCount(queue.shard_count)
     }
   }, [queue])
+
+  useEffect(() => {
+    if (rebalanceCountdown === null) return undefined
+    if (rebalanceCountdown <= 0) {
+      setRebalanceCountdown(null)
+      return undefined
+    }
+    const timer = setTimeout(() => setRebalanceCountdown((c) => (c ?? 1) - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [rebalanceCountdown])
 
   const isDirty =
     !!queue &&
@@ -96,6 +111,7 @@ export function QueueDetailPage() {
       priority !== queue.priority ||
       retryPolicyId !== (queue.retry_policy_id ?? '') ||
       rateLimitEnabled !== (queue.rate_limit_per_minute != null) ||
+      shardCount !== queue.shard_count ||
       (rateLimitEnabled &&
         (rateLimitPerMinute !== (queue.rate_limit_per_minute ?? rateLimitPerMinute) ||
           rateLimitBurst !== (queue.rate_limit_burst ?? rateLimitBurst))))
@@ -108,12 +124,21 @@ export function QueueDetailPage() {
         retry_policy_id: retryPolicyId || null,
         rate_limit_per_minute: rateLimitEnabled ? rateLimitPerMinute : null,
         rate_limit_burst: rateLimitEnabled ? rateLimitBurst : null,
+        shard_count: shardCount,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['queue', queueId] })
       queryClient.invalidateQueries({ queryKey: ['queues', project?.id] })
+      queryClient.invalidateQueries({ queryKey: ['shard-distribution', queueId] })
     },
   })
+
+  const rebalanceMutation = useRebalanceShards(queueId as string)
+  const handleRebalance = () => {
+    rebalanceMutation.mutate(undefined, {
+      onSuccess: (result) => setRebalanceCountdown(result.expected_completion_seconds),
+    })
+  }
 
   const tokensRemaining = queue?.rate_limit_status?.tokens_remaining ?? null
   const burstCapacity = queue?.rate_limit_status?.burst_capacity ?? rateLimitBurst
@@ -311,6 +336,37 @@ export function QueueDetailPage() {
               )}
             </div>
 
+            <div className="border-t border-border pt-4">
+              <label className="mb-1.5 block text-xs text-secondary">Shard Count</label>
+              <input
+                type="number"
+                min={1}
+                max={64}
+                value={shardCount}
+                onChange={(e) => setShardCount(Number(e.target.value))}
+                className={fieldInputClass}
+              />
+              <div className="mt-1.5 text-xs text-secondary">
+                Changing shard count will rebalance all workers (10–15s disruption)
+              </div>
+
+              <button
+                type="button"
+                onClick={handleRebalance}
+                disabled={rebalanceMutation.isPending || rebalanceCountdown !== null}
+                className="mt-3 w-full rounded-md border border-border py-1.5 text-sm text-primary transition-colors hover:bg-elevated disabled:opacity-50"
+              >
+                {rebalanceCountdown !== null ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                    Rebalancing… {rebalanceCountdown}s
+                  </span>
+                ) : (
+                  'Rebalance Now'
+                )}
+              </button>
+            </div>
+
             {isDirty && (
               <button
                 type="button"
@@ -342,6 +398,13 @@ export function QueueDetailPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-3 text-xs uppercase tracking-widest text-secondary">
+          Shard Distribution
+        </div>
+        <ShardDistribution queueId={queueId as string} />
       </div>
     </div>
   )
