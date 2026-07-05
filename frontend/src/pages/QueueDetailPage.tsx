@@ -75,12 +75,18 @@ export function QueueDetailPage() {
   const [concurrencyLimit, setConcurrencyLimit] = useState(0)
   const [priority, setPriority] = useState(0)
   const [retryPolicyId, setRetryPolicyId] = useState('')
+  const [rateLimitEnabled, setRateLimitEnabled] = useState(false)
+  const [rateLimitPerMinute, setRateLimitPerMinute] = useState(60)
+  const [rateLimitBurst, setRateLimitBurst] = useState(60)
 
   useEffect(() => {
     if (queue) {
       setConcurrencyLimit(queue.concurrency_limit)
       setPriority(queue.priority)
       setRetryPolicyId(queue.retry_policy_id ?? '')
+      setRateLimitEnabled(queue.rate_limit_per_minute != null)
+      setRateLimitPerMinute(queue.rate_limit_per_minute ?? 60)
+      setRateLimitBurst(queue.rate_limit_burst ?? queue.rate_limit_per_minute ?? 60)
     }
   }, [queue])
 
@@ -88,7 +94,11 @@ export function QueueDetailPage() {
     !!queue &&
     (concurrencyLimit !== queue.concurrency_limit ||
       priority !== queue.priority ||
-      retryPolicyId !== (queue.retry_policy_id ?? ''))
+      retryPolicyId !== (queue.retry_policy_id ?? '') ||
+      rateLimitEnabled !== (queue.rate_limit_per_minute != null) ||
+      (rateLimitEnabled &&
+        (rateLimitPerMinute !== (queue.rate_limit_per_minute ?? rateLimitPerMinute) ||
+          rateLimitBurst !== (queue.rate_limit_burst ?? rateLimitBurst))))
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -96,12 +106,26 @@ export function QueueDetailPage() {
         concurrency_limit: concurrencyLimit,
         priority,
         retry_policy_id: retryPolicyId || null,
+        rate_limit_per_minute: rateLimitEnabled ? rateLimitPerMinute : null,
+        rate_limit_burst: rateLimitEnabled ? rateLimitBurst : null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['queue', queueId] })
       queryClient.invalidateQueries({ queryKey: ['queues', project?.id] })
     },
   })
+
+  const tokensRemaining = queue?.rate_limit_status?.tokens_remaining ?? null
+  const burstCapacity = queue?.rate_limit_status?.burst_capacity ?? rateLimitBurst
+  const tokenFraction = tokensRemaining != null ? tokensRemaining / Math.max(1, burstCapacity) : null
+  const gaugeColor =
+    tokenFraction == null
+      ? 'var(--text-secondary)'
+      : tokenFraction > 0.5
+        ? 'var(--success)'
+        : tokenFraction > 0.2
+          ? 'var(--warning)'
+          : 'var(--danger)'
 
   if (isLoading) {
     return (
@@ -219,6 +243,72 @@ export function QueueDetailPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-secondary">Enable Rate Limiting</label>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={rateLimitEnabled}
+                  onClick={() => setRateLimitEnabled((v) => !v)}
+                  className="relative h-5 w-9 rounded-full transition-colors"
+                  style={{ backgroundColor: rateLimitEnabled ? 'var(--accent)' : 'var(--border)' }}
+                >
+                  <span
+                    className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform"
+                    style={{ transform: rateLimitEnabled ? 'translateX(18px)' : 'translateX(2px)' }}
+                  />
+                </button>
+              </div>
+
+              {rateLimitEnabled && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs text-secondary">
+                      Max executions per minute
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={rateLimitPerMinute}
+                      onChange={(e) => setRateLimitPerMinute(Number(e.target.value))}
+                      className={fieldInputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs text-secondary">Burst capacity</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={rateLimitBurst}
+                      onChange={(e) => setRateLimitBurst(Number(e.target.value))}
+                      className={fieldInputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs text-secondary">
+                      <span>Token bucket</span>
+                      <span>
+                        {tokensRemaining != null
+                          ? `${tokensRemaining.toFixed(1)} / ${burstCapacity} tokens available`
+                          : 'not active yet'}
+                      </span>
+                    </div>
+                    <div className="h-1 w-full overflow-hidden rounded-full bg-elevated">
+                      <div
+                        className="h-full rounded-full transition-all duration-300 ease-in-out"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, (tokenFraction ?? 1) * 100))}%`,
+                          backgroundColor: gaugeColor,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {isDirty && (

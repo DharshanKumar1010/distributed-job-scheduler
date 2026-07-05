@@ -36,3 +36,5 @@ class Queue(Base, TimestampMixin):
     shard_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default=text("1")
     )
+    rate_limit_per_minute: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rate_limit_burst: Mapped[int | None] = mapped_column(Integer, nullable=True)

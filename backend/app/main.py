@@ -12,6 +12,7 @@ from redis.asyncio import Redis
 
 from app.config import settings
 from app.exceptions import APIError
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.routers import (
     auth,
     dead_letter_queue,
@@ -33,6 +34,7 @@ logger = logging.getLogger("app")
 async def lifespan(app: FastAPI):
     redis_client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
     await redis_client.ping()
+    app.state.redis_client = redis_client
     subscriber_task = asyncio.create_task(run_redis_subscriber(hub, redis_client))
     logger.info("Redis subscriber started")
 
@@ -47,6 +49,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Distributed Job Scheduler", lifespan=lifespan)
 
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],

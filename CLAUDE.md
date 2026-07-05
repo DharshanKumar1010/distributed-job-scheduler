@@ -195,7 +195,7 @@ ANTHROPIC_API_KEY=sk-...
 - [x] Phase 6 — Dashboard (React)
 - [x] Phase 7 — WebSocket live updates
 - [x] Phase 8 — Workflow dependencies (DAG)
-- [ ] Phase 9 — Rate limiting + distributed locking
+- [x] Phase 9 — Rate limiting + distributed locking
 - [ ] Phase 10 — Queue sharding
 - [ ] Phase 11 — RBAC
 - [ ] Phase 12 — AI failure summaries

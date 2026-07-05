@@ -3,6 +3,7 @@ import { queryClient } from '../lib/queryClient'
 import { useAuthStore } from '../store/authStore'
 import { useLiveStatsStore } from '../store/liveStatsStore'
 import { useLiveStore } from '../store/liveStore'
+import { useToastStore } from '../store/toastStore'
 import type {
   JobDetail,
   JobStatus,
@@ -11,6 +12,7 @@ import type {
   WorkerHeartbeat,
   WsEnvelope,
   WsJobEventData,
+  WsQueueRateLimitedData,
   WsQueueStatsData,
   WsWorkerHeartbeatData,
 } from '../types'
@@ -149,6 +151,18 @@ function handleEnvelope(envelope: WsEnvelope): void {
         const queue = old as { stats: WsQueueStatsData }
         return { ...queue, stats: { ...queue.stats, ...payload } }
       })
+      break
+    }
+    case 'queue.rate_limited': {
+      const payload = data as WsQueueRateLimitedData
+      stats.recordRateLimitEvent()
+      useToastStore
+        .getState()
+        .addToast(
+          'warning',
+          `Queue ${payload.queue_name} is rate limited — ${payload.tokens_remaining.toFixed(1)} tokens remaining`,
+        )
+      queryClient.invalidateQueries({ queryKey: ['queue', payload.queue_id] })
       break
     }
     default:

@@ -26,6 +26,7 @@ const EVENT_STYLES: Record<WsEventName, { bg: string; text: string; label: strin
   'worker.disconnected': { bg: 'rgba(100, 116, 139, 0.15)', text: '#94A3B8', label: 'worker' },
   'worker.heartbeat': { bg: 'rgba(100, 116, 139, 0.15)', text: '#94A3B8', label: 'heartbeat' },
   'queue.stats': { bg: 'rgba(100, 116, 139, 0.15)', text: '#94A3B8', label: 'stats' },
+  'queue.rate_limited': { bg: 'rgba(245, 158, 11, 0.15)', text: '#F59E0B', label: 'rate limited' },
 }
 
 /** Worker heartbeats fire every ~10s; only surface one per worker per 30s so

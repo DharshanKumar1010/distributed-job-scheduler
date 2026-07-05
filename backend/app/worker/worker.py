@@ -24,6 +24,7 @@ from app.models.queue import Queue
 from app.models.worker import Worker, WorkerHeartbeat, WorkerStatus
 from app.services import dependency_service, queue_service
 from app.websocket.publisher import publish_event
+from app.worker.rate_limit import check_token_bucket, queue_bucket_key
 from app.worker.retry import compute_next_run
 
 logger = logging.getLogger("worker")
@@ -218,6 +219,39 @@ class JobWorker:
 
         job_row = dict(row)
         job_id = job_row["id"]
+
+        if queue.rate_limit_per_minute and self.redis is not None:
+            capacity = queue.rate_limit_burst or queue.rate_limit_per_minute
+            refill_rate = queue.rate_limit_per_minute / 60.0
+            allowed, tokens_remaining = await check_token_bucket(
+                self.redis, queue_bucket_key(queue.id), capacity, refill_rate
+            )
+            if not allowed:
+                async with AsyncSessionLocal() as db:
+                    await db.execute(
+                        update(Job)
+                        .where(Job.id == job_id)
+                        .values(
+                            status=JobStatus.queued,
+                            worker_id=None,
+                            claimed_at=None,
+                            attempts=Job.attempts - 1,
+                        )
+                    )
+                    await db.commit()
+                logger.info(
+                    "Rate limited on queue %s — %.2f tokens remaining", queue.name, tokens_remaining
+                )
+                await self._publish_event(
+                    "queue.rate_limited",
+                    {
+                        "queue_id": str(queue.id),
+                        "queue_name": queue.name,
+                        "tokens_remaining": tokens_remaining,
+                    },
+                )
+                await asyncio.sleep(1 / refill_rate)
+                return
 
         await self._publish_event(
             "job.claimed",

@@ -22,6 +22,8 @@ export interface QueueUpdatePayload {
   priority?: number
   concurrency_limit?: number
   retry_policy_id?: string | null
+  rate_limit_per_minute?: number | null
+  rate_limit_burst?: number | null
 }
 
 export async function updateQueue(

@@ -4,6 +4,7 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { useAuthStore } from '../store/authStore'
 import { Logo } from './Logo'
 import { PulseRing } from './PulseRing'
+import { ToastContainer } from './Toast'
 
 function DagIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
   return (
@@ -123,6 +124,8 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+
+      <ToastContainer />
     </div>
   )
 }

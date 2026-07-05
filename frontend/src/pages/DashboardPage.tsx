@@ -36,11 +36,16 @@ export function DashboardPage() {
 
       {!isLoading && !isError && (
         <>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
             <StatCard label="Jobs Today" value={stats.jobsToday} />
             <StatCard label="Running Now" value={stats.runningNow} />
             <StatCard label="Failed" value={stats.failed} />
             <StatCard label="Workers Online" value={stats.workersOnline} />
+            <StatCard
+              label="Rate Limited"
+              value={stats.rateLimited}
+              accentColor="var(--warning)"
+            />
           </div>
 
           <div className="mt-6 rounded-lg border border-border bg-card p-5">

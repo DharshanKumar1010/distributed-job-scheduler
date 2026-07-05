@@ -5,6 +5,7 @@ import { listQueues } from '../api/queues'
 import { listWorkers } from '../api/workers'
 import {
   selectFailed,
+  selectRateLimitedLast60Min,
   selectRunningNow,
   selectWorkersOnline,
   useLiveStatsStore,
@@ -17,6 +18,7 @@ export interface DashboardStats {
   runningNow: number
   failed: number
   workersOnline: number
+  rateLimited: number
   chartData: ChartPoint[]
 }
 
@@ -56,6 +58,7 @@ export function useDashboardStats(projectId: string | undefined) {
   const runningNow = useLiveStatsStore(selectRunningNow)
   const failed = useLiveStatsStore(selectFailed)
   const workersOnline = useLiveStatsStore(selectWorkersOnline)
+  const rateLimited = useLiveStatsStore(selectRateLimitedLast60Min)
   const jobsToday = useLiveStatsStore((s) => s.jobsToday)
   const chartData = useLiveStatsStore((s) => s.chartData)
 
@@ -95,7 +98,14 @@ export function useDashboardStats(projectId: string | undefined) {
     seedChartData(baseline.data.chartData)
   }, [baseline.data, seedQueues, seedWorkers, seedJobsToday, seedChartData])
 
-  const stats: DashboardStats = { jobsToday, runningNow, failed, workersOnline, chartData }
+  const stats: DashboardStats = {
+    jobsToday,
+    runningNow,
+    failed,
+    workersOnline,
+    rateLimited,
+    chartData,
+  }
 
   return {
     stats,

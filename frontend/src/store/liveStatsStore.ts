@@ -12,12 +12,17 @@ interface QueueStatsSnapshot {
   failed_count: number
 }
 
+interface RateLimitEvent {
+  ts: number
+}
+
 interface LiveStatsState {
   queueStatsById: Record<string, QueueStatsSnapshot>
   workerStatusById: Record<string, WorkerStatus>
   jobsToday: number
   chartData: ChartPoint[]
   seeded: boolean
+  rateLimitEvents: RateLimitEvent[]
   seedQueues: (queues: Queue[]) => void
   seedWorkers: (workers: Worker[]) => void
   seedJobsToday: (count: number) => void
@@ -25,6 +30,7 @@ interface LiveStatsState {
   patchQueueStats: (queueId: string, stats: QueueStatsSnapshot) => void
   setWorkerStatus: (workerId: string, status: WorkerStatus) => void
   incrementCurrentMinuteBucket: () => void
+  recordRateLimitEvent: () => void
 }
 
 export const useLiveStatsStore = create<LiveStatsState>()((set) => ({
@@ -33,6 +39,7 @@ export const useLiveStatsStore = create<LiveStatsState>()((set) => ({
   jobsToday: 0,
   chartData: [],
   seeded: false,
+  rateLimitEvents: [],
   seedQueues: (queues) =>
     set({
       queueStatsById: Object.fromEntries(
@@ -65,6 +72,12 @@ export const useLiveStatsStore = create<LiveStatsState>()((set) => ({
       }
       return { chartData: next }
     }),
+  recordRateLimitEvent: () =>
+    set((state) => {
+      const cutoff = Date.now() - 60 * 60_000
+      const next = [...state.rateLimitEvents.filter((e) => e.ts >= cutoff), { ts: Date.now() }]
+      return { rateLimitEvents: next }
+    }),
 }))
 
 export function selectRunningNow(state: LiveStatsState): number {
@@ -77,4 +90,9 @@ export function selectFailed(state: LiveStatsState): number {
 
 export function selectWorkersOnline(state: LiveStatsState): number {
   return Object.values(state.workerStatusById).filter((status) => status !== 'offline').length
+}
+
+export function selectRateLimitedLast60Min(state: LiveStatsState): number {
+  const cutoff = Date.now() - 60 * 60_000
+  return state.rateLimitEvents.filter((e) => e.ts >= cutoff).length
 }

@@ -105,6 +105,13 @@ export interface QueueStats {
   throughput_per_min: number
 }
 
+export interface RateLimitStatus {
+  limit_per_minute: number
+  burst_capacity: number
+  tokens_remaining: number | null
+  is_rate_limited: boolean
+}
+
 export interface Queue {
   id: string
   project_id: string
@@ -117,9 +124,12 @@ export interface Queue {
   is_paused: boolean
   is_active: boolean
   shard_count: number
+  rate_limit_per_minute: number | null
+  rate_limit_burst: number | null
   created_at: string
   updated_at: string
   stats: QueueStats
+  rate_limit_status: RateLimitStatus | null
 }
 
 // ---- Job ----
@@ -326,6 +336,7 @@ export type WsEventName =
   | 'worker.disconnected'
   | 'worker.heartbeat'
   | 'queue.stats'
+  | 'queue.rate_limited'
 
 export interface WsEnvelope<T = unknown> {
   event: WsEventName
@@ -372,4 +383,10 @@ export interface WsQueueStatsData {
   pending_count: number
   running_count: number
   failed_count: number
+}
+
+export interface WsQueueRateLimitedData {
+  queue_id: string
+  queue_name: string
+  tokens_remaining: number
 }

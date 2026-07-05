@@ -1,9 +1,10 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -60,3 +61,7 @@ def require_role(*roles: UserRole):
 def ensure_same_org(current_user: User, org_id: uuid.UUID) -> None:
     if current_user.org_id != org_id:
         raise APIError(404, "ORG_NOT_FOUND", "Organization not found")
+
+
+async def get_redis(request: Request) -> Redis:
+    return request.app.state.redis_client
