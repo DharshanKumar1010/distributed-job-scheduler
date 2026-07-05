@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useToastStore, type ToastItem, type ToastType } from '../store/toastStore'
 
 const TYPE_COLOR: Record<ToastType, string> = {
@@ -10,16 +11,22 @@ const TYPE_COLOR: Record<ToastType, string> = {
 
 function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
   const [entered, setEntered] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true))
     return () => cancelAnimationFrame(frame)
   }, [])
 
+  const handleClick = () => {
+    onDismiss(toast.id)
+    if (toast.actionHref) navigate(toast.actionHref)
+  }
+
   return (
     <div
       role="status"
-      onClick={() => onDismiss(toast.id)}
+      onClick={handleClick}
       className="w-80 max-w-[calc(100vw-2rem)] cursor-pointer rounded-md border border-border bg-elevated px-4 py-3 text-sm text-primary shadow-lg"
       style={{
         borderLeft: `3px solid ${TYPE_COLOR[toast.type]}`,

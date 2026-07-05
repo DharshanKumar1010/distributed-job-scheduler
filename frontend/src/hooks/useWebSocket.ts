@@ -10,6 +10,7 @@ import type {
   Worker,
   WorkerDetail,
   WorkerHeartbeat,
+  WsDlqAiSummaryReadyData,
   WsEnvelope,
   WsJobEventData,
   WsQueueRateLimitedData,
@@ -175,6 +176,19 @@ function handleEnvelope(envelope: WsEnvelope): void {
           `Queue ${payload.queue_name} is rebalancing shards — workers will reassign within 15s`,
         )
       queryClient.invalidateQueries({ queryKey: ['shard-distribution', payload.queue_id] })
+      break
+    }
+    case 'dlq.ai_summary_ready': {
+      const payload = data as WsDlqAiSummaryReadyData
+      queryClient.invalidateQueries({ queryKey: ['dlq-analysis', payload.dlq_id] })
+      queryClient.invalidateQueries({ queryKey: ['dlq'] })
+      useToastStore
+        .getState()
+        .addToast(
+          'success',
+          `AI analysis ready for '${payload.job_name}' — click to view`,
+          `/dlq?expand=${payload.dlq_id}`,
+        )
       break
     }
     default:

@@ -28,6 +28,7 @@ const EVENT_STYLES: Record<WsEventName, { bg: string; text: string; label: strin
   'queue.stats': { bg: 'rgba(100, 116, 139, 0.15)', text: '#94A3B8', label: 'stats' },
   'queue.rate_limited': { bg: 'rgba(245, 158, 11, 0.15)', text: '#F59E0B', label: 'rate limited' },
   'queue.rebalancing': { bg: 'rgba(59, 130, 246, 0.15)', text: '#3B82F6', label: 'rebalancing' },
+  'dlq.ai_summary_ready': { bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981', label: 'ai ready' },
 }
 
 /** Worker heartbeats fire every ~10s; only surface one per worker per 30s so

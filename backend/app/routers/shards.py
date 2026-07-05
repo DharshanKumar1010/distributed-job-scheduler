@@ -9,9 +9,10 @@ from app.auth.permissions import Permission
 from app.dependencies import get_db, get_redis, require_permission
 from app.models.user import User
 from app.models.worker import Worker
+from app.schemas.ai import FailurePatternOut
 from app.schemas.common import DataResponse
 from app.schemas.shard import RebalanceResult, ShardDistributionOut, ShardOut, ShardWorkerOut
-from app.services import queue_service
+from app.services import ai_service, queue_service
 from app.worker import shard as shard_engine
 from app.websocket.publisher import publish_event
 
@@ -76,3 +77,15 @@ async def rebalance_shards(
         {"queue_id": str(queue_id), "queue_name": queue.name},
     )
     return DataResponse(data=RebalanceResult(status="rebalancing", expected_completion_seconds=15))
+
+
+@router.get("/queues/{queue_id}/failure-patterns", response_model=DataResponse[FailurePatternOut])
+async def get_failure_patterns(
+    queue_id: uuid.UUID,
+    current_user: User = Depends(require_permission(Permission.DLQ_READ)),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+    await queue_service.get_queue_for_org(db, current_user.org_id, queue_id)
+    result = await ai_service.analyze_failure_pattern(queue_id, db, redis)
+    return DataResponse(data=FailurePatternOut(**result))

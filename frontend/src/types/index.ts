@@ -363,6 +363,34 @@ export interface DeadLetterQueueEntry {
   created_at: string
 }
 
+export interface ExecutionPattern {
+  attempts: number
+  avg_duration_ms: number | null
+  min_duration_ms: number | null
+  max_duration_ms: number | null
+  failed_consistently: boolean
+}
+
+export interface DlqAnalysis {
+  dlq_id: string
+  job_name: string
+  error_type: string
+  ai_summary: string | null
+  is_generating: boolean
+  total_attempts: number
+  time_to_failure_ms: number
+  execution_pattern: ExecutionPattern
+}
+
+export interface FailurePattern {
+  total_failures: number
+  error_type_distribution: Record<string, number>
+  most_common_error: string
+  failure_rate_trend: 'increasing' | 'stable' | 'decreasing'
+  peak_failure_hour: number | null
+  recommendation: string
+}
+
 // ---- WebSocket events ----
 
 export type WsEventName =
@@ -382,6 +410,7 @@ export type WsEventName =
   | 'queue.stats'
   | 'queue.rate_limited'
   | 'queue.rebalancing'
+  | 'dlq.ai_summary_ready'
 
 export interface WsEnvelope<T = unknown> {
   event: WsEventName
@@ -439,4 +468,10 @@ export interface WsQueueRateLimitedData {
 export interface WsQueueRebalancingData {
   queue_id: string
   queue_name: string
+}
+
+export interface WsDlqAiSummaryReadyData {
+  dlq_id: string
+  job_id: string
+  job_name: string
 }

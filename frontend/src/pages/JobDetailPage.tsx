@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { cancelJob, retryJob } from '../api/jobs'
+import { AiSummaryCard } from '../components/AiSummaryCard'
 import { ErrorState } from '../components/ErrorState'
 import { JsonViewer } from '../components/JsonViewer'
 import { LogViewer } from '../components/LogViewer'
@@ -10,6 +11,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Skeleton } from '../components/Skeleton'
 import { StatusBadge } from '../components/StatusBadge'
 import { useJobDependencies, useJobDependents } from '../hooks/useDependencies'
+import { useDlqAnalysis, useDlqEntries, useReanalyzeDlqEntry } from '../hooks/useDlq'
 import { useJob } from '../hooks/useJobs'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatDateTime } from '../lib/format'
@@ -89,6 +91,27 @@ function DependenciesSection({ jobId }: { jobId: string }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function DeadJobAiSection({ jobId }: { jobId: string }) {
+  const { can } = usePermissions()
+  const { data: dlqResult } = useDlqEntries({ job_id: jobId, limit: 1 })
+  const entry = dlqResult?.data[0]
+  const { data: analysis } = useDlqAnalysis(entry?.id)
+  const reanalyzeMutation = useReanalyzeDlqEntry(entry?.id ?? '')
+
+  if (!entry) return null
+
+  return (
+    <div className="mt-6">
+      <AiSummaryCard
+        summary={analysis?.ai_summary ?? null}
+        isGenerating={analysis?.is_generating ?? true}
+        onReanalyze={can('dlq:resolve') ? () => reanalyzeMutation.mutate() : undefined}
+        reanalyzing={reanalyzeMutation.isPending}
+      />
     </div>
   )
 }
@@ -263,6 +286,8 @@ export function JobDetailPage() {
           <JsonViewer data={job.payload} />
         </div>
       </div>
+
+      {job.status === 'dead' && <DeadJobAiSection jobId={job.id} />}
 
       <DependenciesSection jobId={job.id} />
 

@@ -23,7 +23,7 @@ from app.models.job_log import JobLog, LogLevel
 from app.models.project import Project
 from app.models.queue import Queue
 from app.models.worker import Worker, WorkerHeartbeat, WorkerStatus
-from app.services import dependency_service, queue_service
+from app.services import ai_service, dependency_service, queue_service
 from app.websocket.publisher import publish_event
 from app.worker import shard
 from app.worker.rate_limit import check_token_bucket, queue_bucket_key
@@ -483,6 +483,7 @@ class JobWorker:
 
             will_retry = attempt_number < job_row["max_attempts"]
             next_run: datetime | None = None
+            dlq_id: uuid.UUID | None = None
 
             if will_retry:
                 next_run = compute_next_run(
@@ -513,18 +514,24 @@ class JobWorker:
                         error_traceback=tb,
                     )
                 )
-                db.add(
-                    DeadLetterQueueEntry(
-                        job_id=job_id,
-                        queue_id=job_row["queue_id"],
-                        failed_at=completed_at,
-                        total_attempts=attempt_number,
-                        last_error=str(error),
-                        last_traceback=tb,
-                    )
+                dlq_entry = DeadLetterQueueEntry(
+                    job_id=job_id,
+                    queue_id=job_row["queue_id"],
+                    failed_at=completed_at,
+                    total_attempts=attempt_number,
+                    last_error=str(error),
+                    last_traceback=tb,
                 )
+                db.add(dlq_entry)
+                await db.flush()
+                dlq_id = dlq_entry.id
 
             await db.commit()
+
+        if not will_retry:
+            # Fire-and-forget: AI analysis must never block job processing or
+            # delay the job.failed/job.dead events below.
+            asyncio.create_task(ai_service.run_dlq_analysis(dlq_id, job_id, self.redis, self.org_id))
 
         await self._publish_event(
             "job.failed",
