@@ -16,3 +16,4 @@ pytest-asyncio
 pytest-httpx
 anthropic
 psutil
+reportlab

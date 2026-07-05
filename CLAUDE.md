@@ -199,3 +199,4 @@ ANTHROPIC_API_KEY=sk-...
 - [x] Phase 10 — Queue sharding
 - [x] Phase 11 — RBAC
 - [x] Phase 12 — AI failure summaries
+- [x] Phase 13 — Docs (architecture, ERD, API reference, design decisions, test coverage) + submission.pdf
