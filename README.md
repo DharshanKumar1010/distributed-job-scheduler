@@ -1,163 +1,401 @@
 # Distributed Job Scheduler
 
-A production-grade distributed job scheduling platform. Users submit jobs via
-a REST API; workers atomically claim and execute them using PostgreSQL's
-`FOR UPDATE SKIP LOCKED`; a React dashboard shows real-time queue health,
-worker status, live DAG workflows, and AI-powered failure analysis over
-WebSockets.
+A production-inspired distributed background job scheduling platform built with **FastAPI**, **PostgreSQL**, **Redis**, and **React**. The system supports asynchronous job execution, distributed workers, scheduling, retries, workflow dependencies, RBAC, real-time monitoring, and AI-powered failure analysis.
 
-Built across 13 phases — the core assignment (auth, queues, all 5 job types,
-atomic claiming, retries/DLQ, a live dashboard) plus five bonus phases that
-go well beyond it: a full DAG workflow engine, Redis-backed rate limiting
-and distributed locking, consistent-hashing queue sharding, role-based
-access control, and Groq-powered root-cause analysis on failed jobs.
+> Built as an internship assignment for Codity.AI to demonstrate backend engineering, distributed systems, database design, concurrency, and full-stack development.
 
-**33/33 automated tests passing · 49 REST endpoints · 13 database tables ·
-zero TypeScript errors.**
+---
 
-See [`CLAUDE.md`](./CLAUDE.md) for the full technical spec, conventions, and
-phase checklist that guided development, and [`docs/`](./docs) for
-architecture, ER diagram, API reference, design decisions, and test
-coverage writeups.
+## Features
 
-## Stack
+### Job Scheduling
+- Immediate jobs
+- Delayed jobs
+- Scheduled jobs
+- Recurring (Cron) jobs
+- Batch jobs
 
-| Layer | Technology |
-|---|---|
-| Backend API | FastAPI (async), Python 3.11+ |
-| ORM | SQLAlchemy 2.0 (async) + Alembic |
-| Database | PostgreSQL 15 |
-| Cache / Pub-Sub / Locks | Redis 7 |
-| Worker runtime | Python asyncio (no Celery/RQ/ARQ) |
-| Cron parsing | croniter |
-| Frontend | React 18 + TypeScript + Vite |
-| Styling | Tailwind CSS |
-| Charts | Recharts + hand-rolled SVG (DAG canvas, shard map) |
-| Auth | JWT (python-jose) + bcrypt, 29-permission RBAC |
-| AI | Groq API (DLQ root-cause analysis, graceful fallback) |
-| Testing | pytest + pytest-asyncio + httpx, against real Postgres/Redis |
+### Queue Management
+- Multiple queues per project
+- Queue priorities
+- Pause / Resume queues
+- Configurable concurrency limits
+- Queue statistics
+- Retry policies
 
-## Quick start
+### Worker System
+- Distributed workers
+- Atomic job claiming using PostgreSQL `FOR UPDATE SKIP LOCKED`
+- Heartbeat monitoring
+- Automatic crash recovery
+- Graceful shutdown
+- Queue sharding
+- Worker concurrency
 
-### 1. Start Postgres + Redis
+### Reliability
+- Fixed retry strategy
+- Linear retry strategy
+- Exponential retry strategy
+- Dead Letter Queue
+- Execution history
+- Job logs
+- Retry metrics
 
-```bash
-docker compose up -d
+### Workflow Engine
+- Job dependencies
+- DAG workflow execution
+- Dependency tracking
+- Automatic unblocking
+
+### Security
+- JWT Authentication
+- Role Based Access Control (RBAC)
+- Organizations
+- Projects
+- Permission-based APIs
+
+### Dashboard
+- Live worker monitoring
+- Queue dashboard
+- Job explorer
+- Dead Letter Queue
+- Workflow visualization
+- Real-time WebSocket updates
+
+### AI Integration
+- AI-generated failure summaries
+- Root cause analysis using Groq API
+
+---
+
+# Architecture
+
+```
+                    React Dashboard
+                          │
+                WebSocket / REST API
+                          │
+                   FastAPI Backend
+                          │
+        ┌─────────────────┴────────────────┐
+        │                                  │
+   PostgreSQL                         Redis
+        │                                  │
+        │                           Pub/Sub
+        │                                  │
+        ├──────────────┐                   │
+        │              │                   │
+     Worker 1       Worker N         Dispatcher
+                        │
+                    Reaper Service
 ```
 
-### 2. Backend API
+---
+
+# Tech Stack
+
+## Backend
+
+- FastAPI
+- SQLAlchemy 2.0
+- AsyncPG
+- Alembic
+- PostgreSQL
+- Redis
+- Pydantic
+- JWT Authentication
+- WebSockets
+
+## Frontend
+
+- React
+- TypeScript
+- Vite
+- React Query
+- Tailwind CSS
+- Recharts
+
+## AI
+
+- Groq API
+
+## Infrastructure
+
+- Render
+- Vercel
+- Supabase
+- Upstash Redis
+
+---
+
+# Project Structure
+
+```
+distributed-job-scheduler
+│
+├── backend
+│   ├── app
+│   ├── alembic
+│   ├── tests
+│   ├── requirements.txt
+│   └── run_worker.py
+│
+├── frontend
+│
+├── docs
+│   ├── architecture.md
+│   ├── api-reference.md
+│   ├── er-diagram.md
+│   ├── design-decisions.md
+│   └── test-coverage.md
+│
+└── docker-compose.yml
+```
+
+---
+
+# Database
+
+The system contains **13 normalized database tables**
+
+- Organizations
+- Users
+- Projects
+- Queues
+- Retry Policies
+- Workers
+- Worker Heartbeats
+- Jobs
+- Job Executions
+- Job Logs
+- Scheduled Jobs
+- Dead Letter Queue
+- Job Dependencies
+
+Highlights
+
+- UUID Primary Keys
+- Foreign Keys
+- Cascading Deletes
+- Indexed Claim Query
+- Normalized Retry Policies
+
+---
+
+# Job Lifecycle
+
+```
+Queued
+    │
+    ▼
+Claimed
+    │
+    ▼
+Running
+    │
+ ┌──┴──────────────┐
+ ▼                 ▼
+Completed      Failed
+                    │
+            Retry Strategy
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+      Requeued          Dead Letter Queue
+```
+
+---
+
+# Concurrency
+
+The scheduler prevents duplicate execution using PostgreSQL row locking.
+
+```sql
+FOR UPDATE SKIP LOCKED
+```
+
+Features include
+
+- Atomic claiming
+- Worker heartbeats
+- Crash recovery
+- Distributed locking
+- Queue sharding
+
+---
+
+# API
+
+The project exposes **49 REST endpoints**
+
+- Authentication
+- Organizations
+- Projects
+- Queues
+- Jobs
+- Workers
+- Retry Policies
+- Dead Letter Queue
+- Workflow APIs
+- WebSocket Endpoint
+
+Interactive documentation
+
+```
+/docs
+```
+
+---
+
+# Testing
+
+The project contains **33 automated tests**
+
+Tests include
+
+- Retry strategies
+- RBAC
+- Worker concurrency
+- Queue sharding
+- Rate limiting
+- Workflow dependencies
+
+Run
+
+```bash
+pytest tests/
+```
+
+---
+
+# Installation
+
+## Clone
+
+```bash
+git clone https://github.com/DharshanKumar1010/distributed-job-scheduler.git
+```
+
+---
+
+## Backend
 
 ```bash
 cd backend
-python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # macOS/Linux
+
+python -m venv venv
+
+source venv/bin/activate
+# Windows
+venv\Scripts\activate
+
 pip install -r requirements.txt
+
 alembic upgrade head
+
 uvicorn app.main:app --reload
 ```
 
-API at http://localhost:8000, interactive docs at http://localhost:8000/docs,
-health check at http://localhost:8000/health.
+---
 
-### 3. Worker (run at least one per queue)
+## Worker
 
 ```bash
-cd backend
-QUEUE_ID=<your-queue-uuid> python -m app.worker.entrypoint
+python -m app.worker.entrypoint
 ```
 
-Set `SHARD_ID=<n>` instead of leaving it unset if you want a worker pinned
-to a fixed shard rather than dynamically self-assigned (see
-[`docs/design-decisions.md`](./docs/design-decisions.md#5-consistent-hashing-over-a-redis-backed-worker-registry--not-a-fixed-hash-ring)).
+---
 
-### 4. Dispatcher + reaper (materializes scheduled/cron jobs, recovers dead workers)
+## Dispatcher
 
 ```bash
-cd backend
 python -m app.scheduler.entrypoint
 ```
 
-Safe to run more than one — they elect a single leader via a Postgres
-advisory lock and fail over automatically.
+---
 
-### 5. Frontend
+## Frontend
 
 ```bash
 cd frontend
+
 npm install
+
 npm run dev
 ```
 
-Dashboard at http://localhost:5173.
+---
 
-## Environment variables
+# Environment Variables
 
-Copy the defaults already present in `backend/.env` and `frontend/.env` for
-local development. `GROQ_API_KEY` is optional — the AI failure-analysis
-feature degrades to a fully-structured static analysis (using the same
-error-classification heuristics) if it isn't set. See `CLAUDE.md` for the
-full list.
-
-## Running the tests
-
-```bash
-cd backend
-pytest tests/ -v --tb=short
-```
-
-All 33 tests run against a real Postgres + Redis instance (started via
-`docker compose up -d`) — nothing is mocked. See
-[`docs/test-coverage.md`](./docs/test-coverage.md) for what each test file
-proves.
-
-## Documentation
-
-| Doc | Contents |
-|---|---|
-| [`docs/architecture.md`](./docs/architecture.md) | System diagram, process inventory, why this shape |
-| [`docs/er-diagram.md`](./docs/er-diagram.md) | Full ERD for all 13 tables + indexing rationale |
-| [`docs/api-reference.md`](./docs/api-reference.md) | All 49 endpoints, grouped, with request/response examples |
-| [`docs/design-decisions.md`](./docs/design-decisions.md) | Six trade-off writeups: queue-on-Postgres, visibility timeout, DAG via recursive CTE, dual rate limiters, consistent-hashing shards, fire-and-forget AI |
-| [`docs/test-coverage.md`](./docs/test-coverage.md) | All 33 tests, grouped by file, with the most important test walked through |
-| [`docs/submission.pdf`](./docs/submission.pdf) | Print-ready summary of all of the above |
-
-## Project structure
+Create
 
 ```
-/
-├── CLAUDE.md
-├── README.md
-├── docker-compose.yml
-├── docs/
-│   ├── architecture.md
-│   ├── er-diagram.md
-│   ├── api-reference.md
-│   ├── design-decisions.md
-│   ├── test-coverage.md
-│   └── submission.pdf
-├── backend/
-│   ├── app/
-│   │   ├── main.py, config.py, database.py, dependencies.py, exceptions.py
-│   │   ├── auth/          # permission constants + role matrix
-│   │   ├── models/        # 13 SQLAlchemy tables
-│   │   ├── schemas/       # Pydantic v2 request/response models
-│   │   ├── routers/       # 11 route families, 49 endpoints
-│   │   ├── services/      # business logic, one module per domain
-│   │   ├── middleware/    # sliding-window rate limiter
-│   │   ├── worker/        # claim loop, retries, sharding, rate limiting
-│   │   ├── scheduler/     # dispatcher, reaper, distributed locks
-│   │   └── websocket/     # connection hub, Redis subscriber, publisher
-│   ├── alembic/versions/  # migrations
-│   ├── tests/             # 33 tests, 6 files
-│   └── requirements.txt
-└── frontend/
-    ├── src/
-    │   ├── pages/          # 9 pages incl. Workflows, Settings
-    │   ├── components/     # DagCanvas, ShardDistribution, AiSummaryCard, Toast, ...
-    │   ├── hooks/          # React Query hooks, usePermissions, useWebSocket
-    │   ├── api/            # typed API client functions
-    │   ├── store/          # Zustand: auth, live stats, toasts
-    │   └── types/          # shared TS types mirroring backend schemas
-    └── package.json
+backend/.env
 ```
+
+```env
+DATABASE_URL=
+REDIS_URL=
+SECRET_KEY=
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+WORKER_CONCURRENCY=5
+WORKER_POLL_INTERVAL_SECONDS=1
+HEARTBEAT_INTERVAL_SECONDS=10
+REAPER_INTERVAL_SECONDS=30
+
+GROQ_API_KEY=
+```
+
+---
+
+# Deployment
+
+Backend
+- Render
+
+Frontend
+- Vercel
+
+Database
+- Supabase PostgreSQL
+
+Cache
+- Upstash Redis
+
+---
+
+# Documentation
+
+Additional documentation is available inside the `docs` folder.
+
+- Architecture
+- API Reference
+- ER Diagram
+- Design Decisions
+- Test Coverage
+
+---
+
+# Highlights
+
+- Production-inspired architecture
+- Distributed workers
+- Real-time monitoring
+- WebSocket updates
+- Queue sharding
+- Distributed locking
+- Workflow engine
+- RBAC
+- AI failure analysis
+- PostgreSQL concurrency
+- Redis Pub/Sub
+- Async Python
+- React Dashboard
+
+---
+
+# License
+
+This project was developed for educational purposes as part of the Codity.AI internship assignment.
