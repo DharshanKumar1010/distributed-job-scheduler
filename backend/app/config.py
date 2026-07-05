@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     WORKER_POLL_INTERVAL_SECONDS: int
     HEARTBEAT_INTERVAL_SECONDS: int
     REAPER_INTERVAL_SECONDS: int
-    ANTHROPIC_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
 
 
 settings = Settings()

@@ -4,7 +4,7 @@ import uuid
 from collections import Counter
 from datetime import timezone
 
-import anthropic
+from groq import AsyncGroq
 from redis.asyncio import Redis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ from app.websocket.publisher import publish_event
 
 logger = logging.getLogger("ai_service")
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "llama-3.3-70b-versatile"
 MAX_TOKENS = 400
 FAILURE_PATTERN_CACHE_SECONDS = 300
 FAILURE_PATTERN_SAMPLE_SIZE = 100
@@ -94,8 +94,8 @@ def format_logs(logs: list[JobLog]) -> str:
 
 
 def _is_api_key_configured() -> bool:
-    key = settings.ANTHROPIC_API_KEY
-    return bool(key) and key != "sk-..."
+    key = settings.GROQ_API_KEY
+    return bool(key) and key != "gsk_..."
 
 
 def _static_fallback_summary(error_type: str, dlq_entry: DeadLetterQueueEntry) -> str:
@@ -163,13 +163,13 @@ Provide a concise debugging report with these exact sections:
 Be specific to this job's payload and error — no generic advice.
 If the payload contains sensitive-looking fields (password, token, secret, key), note them but do not include their values in your analysis."""
 
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-    message = await client.messages.create(
+    client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+    message = await client.chat.completions.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         messages=[{"role": "user", "content": prompt}],
     )
-    return message.content[0].text
+    return message.choices[0].message.content
 
 
 async def run_dlq_analysis(

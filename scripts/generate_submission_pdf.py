@@ -368,7 +368,7 @@ def page_2_executive_summary(c):
     p2 = (
         "Built over 13 phases, the implementation goes beyond the core requirements to include a "
         "full DAG workflow engine, distributed locking, queue sharding for horizontal scale, "
-        "role-based access control, and AI-powered failure analysis using the Claude API."
+        "role-based access control, and AI-powered failure analysis using the Groq API."
     )
     ly = draw_paragraph(c, MARGIN, ly, p2, max_width=left_w - 0.3 * cm)
     ly -= 14
@@ -437,7 +437,7 @@ def page_3_architecture(c):
     y = draw_section_header(c, y, "Architecture")
 
     diagram_top = y - 0.3 * cm
-    # Shifted left of true center so the Claude API box has a clean, non-
+    # Shifted left of true center so the Groq API box has a clean, non-
     # overlapping column of its own on the right.
     center_x = MARGIN + CONTENT_W * 0.35
 
@@ -474,16 +474,16 @@ def page_3_architecture(c):
     draw_box(c, pgx, row4_y, infra_w, infra_h, "PostgreSQL 15", "13 tables • Migrations • Advisory locks", fill=HexColor("#EFF6FF"))
     draw_box(c, redisx, row4_y, infra_w, infra_h, "Redis 7", "Pub/Sub • Token bucket • Shard registry", fill=HexColor("#EFF6FF"))
 
-    # Claude API box: its own column to the right, clear of the b3 dispatcher
-    # box (verified: b3's right edge sits comfortably left of claude_x's
+    # Groq API box: its own column to the right, clear of the b3 dispatcher
+    # box (verified: b3's right edge sits comfortably left of groq_x's
     # left edge, unlike the first draft which overlapped).
-    claude_w = 3.3 * cm
-    claude_x = PAGE_W - MARGIN - claude_w / 2
-    claude_y = row3_y
-    draw_box(c, claude_x, claude_y, claude_w, small_h, "Claude API", "AI failure analysis", fill=HexColor("#FEF3C7"), border=WARNING)
+    groq_w = 3.3 * cm
+    groq_x = PAGE_W - MARGIN - groq_w / 2
+    groq_y = row3_y
+    draw_box(c, groq_x, groq_y, groq_w, small_h, "Groq API", "AI failure analysis", fill=HexColor("#FEF3C7"), border=WARNING)
     # Routed from the rightmost box's edge (not straight from a worker box)
     # so the line doesn't cross through the dispatcher box sitting between them.
-    draw_arrow(c, b3x + small_w / 2 + 0.1 * cm, row3_y, claude_x - claude_w / 2 - 0.15 * cm, claude_y, label="On DLQ entry", color=WARNING)
+    draw_arrow(c, b3x + small_w / 2 + 0.1 * cm, row3_y, groq_x - groq_w / 2 - 0.15 * cm, groq_y, label="On DLQ entry", color=WARNING)
 
     table_y = row4_y - infra_h / 2 - 1.0 * cm
     c.setFont("Helvetica-Bold", 11)
@@ -549,7 +549,7 @@ def page_4_feature_checklist(c):
         ("Auto Shard Assign", "Workers self-assign via Redis registry"),
         ("RBAC", "29 permissions across 4 roles"),
         ("Settings Page", "Team management, invite members"),
-        ("AI Failure Analysis", "Claude API root cause summaries"),
+        ("AI Failure Analysis", "Groq API root cause summaries"),
         ("Error Classification", "8-category heuristic classifier"),
         ("Failure Patterns", "Queue-level analytics, peak hours"),
         ("Toast Notifications", "Real-time, clickable, auto-dismiss"),
@@ -835,7 +835,7 @@ def page_8_quick_start(c):
     c.drawCentredString(PAGE_W / 2, banner_y + banner_h * 0.38, "All 16 bonus features implemented.")
     c.setFont("Helvetica", 9)
     c.setFillColor(HexColor("#94A3B8"))
-    c.drawCentredString(PAGE_W / 2, banner_y + banner_h * 0.14, "Built with FastAPI • PostgreSQL • Redis • React • Claude API")
+    c.drawCentredString(PAGE_W / 2, banner_y + banner_h * 0.14, "Built with FastAPI • PostgreSQL • Redis • React • Groq API")
 
     c.showPage()
 

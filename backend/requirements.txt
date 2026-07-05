@@ -19,7 +19,7 @@ croniter
 psutil
 
 # AI
-anthropic
+groq
 
 # Config
 pydantic-settings

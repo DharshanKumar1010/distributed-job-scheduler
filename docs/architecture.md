@@ -29,7 +29,7 @@ flowchart TB
     end
 
     subgraph AI["External"]
-        CLAUDE["Claude API\nAI failure analysis"]
+        GROQ["Groq API\nAI failure analysis"]
     end
 
     FE -- "HTTPS + WSS" --> BE
@@ -46,9 +46,9 @@ flowchart TB
     DISP -- "pg_try_advisory_lock" --> PG
     DISP -- "cron dedup lock" --> REDIS
 
-    W0 -. "on DLQ entry" .-> CLAUDE
-    WN -. "on DLQ entry" .-> CLAUDE
-    CLAUDE -. "root cause summary" .-> PG
+    W0 -. "on DLQ entry" .-> GROQ
+    WN -. "on DLQ entry" .-> GROQ
+    GROQ -. "root cause summary" .-> PG
 ```
 
 ## Why this shape
@@ -89,7 +89,7 @@ cost of at-least-once delivery (handlers must be idempotent).
 **AI analysis is fully decoupled from job execution.** When a job exhausts
 its retries and lands in the dead-letter queue, the worker fires
 `asyncio.create_task(ai_service.run_dlq_analysis(...))` and moves on
-immediately — it is never awaited. A slow or failing Claude API call can
+immediately — it is never awaited. A slow or failing Groq API call can
 never block the worker's poll loop. If no API key is configured, or the call
 fails for any reason, the fallback path returns a fully-structured static
 analysis derived from the existing error-classification heuristics, so the

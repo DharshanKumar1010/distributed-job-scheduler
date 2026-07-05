@@ -10,7 +10,7 @@ Built across 13 phases — the core assignment (auth, queues, all 5 job types,
 atomic claiming, retries/DLQ, a live dashboard) plus five bonus phases that
 go well beyond it: a full DAG workflow engine, Redis-backed rate limiting
 and distributed locking, consistent-hashing queue sharding, role-based
-access control, and Claude-powered root-cause analysis on failed jobs.
+access control, and Groq-powered root-cause analysis on failed jobs.
 
 **33/33 automated tests passing · 49 REST endpoints · 13 database tables ·
 zero TypeScript errors.**
@@ -34,7 +34,7 @@ coverage writeups.
 | Styling | Tailwind CSS |
 | Charts | Recharts + hand-rolled SVG (DAG canvas, shard map) |
 | Auth | JWT (python-jose) + bcrypt, 29-permission RBAC |
-| AI | Anthropic Claude API (DLQ root-cause analysis, graceful fallback) |
+| AI | Groq API (DLQ root-cause analysis, graceful fallback) |
 | Testing | pytest + pytest-asyncio + httpx, against real Postgres/Redis |
 
 ## Quick start
@@ -94,7 +94,7 @@ Dashboard at http://localhost:5173.
 ## Environment variables
 
 Copy the defaults already present in `backend/.env` and `frontend/.env` for
-local development. `ANTHROPIC_API_KEY` is optional — the AI failure-analysis
+local development. `GROQ_API_KEY` is optional — the AI failure-analysis
 feature degrades to a fully-structured static analysis (using the same
 error-classification heuristics) if it isn't set. See `CLAUDE.md` for the
 full list.

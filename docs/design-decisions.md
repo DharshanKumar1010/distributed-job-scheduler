@@ -140,11 +140,11 @@ shard at all. The fix is normalizing with
 
 ## 6. Fire-and-forget AI analysis — never on the request/execution path
 
-Phase 12's Claude-powered failure analysis is wired so it can **never**
+Phase 12's Groq-powered failure analysis is wired so it can **never**
 affect job processing or API latency: the worker calls
 `asyncio.create_task(ai_service.run_dlq_analysis(...))` and immediately
 continues to publish `job.dead` — the task is never awaited. If
-`ANTHROPIC_API_KEY` isn't configured, `generate_failure_summary` detects
+`GROQ_API_KEY` isn't configured, `generate_failure_summary` detects
 that up front and returns a fully-structured static analysis (built from
 the same error-classification heuristics used everywhere else) without
 attempting a network call at all. If the API call itself fails for any
@@ -153,6 +153,6 @@ instead of leaving the field null forever.
 
 | ✓ Why we chose this | ⚠ Trade-off |
 |---|---|
-| A slow or down Claude API can never block a worker's poll loop or an API response | The DLQ entry briefly shows "generating" — the frontend polls/WS-updates rather than getting the summary synchronously |
+| A slow or down Groq API can never block a worker's poll loop or an API response | The DLQ entry briefly shows "generating" — the frontend polls/WS-updates rather than getting the summary synchronously |
 | Two distinct, honest fallback states (no key vs. call failed) instead of one generic error string | Reanalyze is a genuinely separate code path (`ai_summary = NULL` + re-trigger), not just "call the same function again" |
 | The feature degrades to something still useful (heuristic classification + generic advice) instead of a blank UI | |
