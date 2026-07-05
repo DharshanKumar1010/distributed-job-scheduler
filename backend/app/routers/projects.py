@@ -30,7 +30,9 @@ async def list_projects(
 
 
 @router.post(
-    "/{org_id}/projects", response_model=DataResponse[ProjectOut], status_code=status.HTTP_201_CREATED
+    "/{org_id}/projects",
+    response_model=DataResponse[ProjectOut],
+    status_code=status.HTTP_201_CREATED,
 )
 async def create_project(
     org_id: uuid.UUID,
@@ -57,7 +59,9 @@ async def get_project(
     return DataResponse(data=ProjectOut.model_validate(project))
 
 
-@router.patch("/{org_id}/projects/{project_id}", response_model=DataResponse[ProjectOut])
+@router.patch(
+    "/{org_id}/projects/{project_id}", response_model=DataResponse[ProjectOut]
+)
 async def update_project(
     org_id: uuid.UUID,
     project_id: uuid.UUID,
@@ -72,7 +76,9 @@ async def update_project(
     return DataResponse(data=ProjectOut.model_validate(project))
 
 
-@router.delete("/{org_id}/projects/{project_id}", response_model=DataResponse[ProjectOut])
+@router.delete(
+    "/{org_id}/projects/{project_id}", response_model=DataResponse[ProjectOut]
+)
 async def delete_project(
     org_id: uuid.UUID,
     project_id: uuid.UUID,

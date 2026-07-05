@@ -27,7 +27,9 @@ async def reap_once(redis_client: Redis | None = None) -> list[uuid.UUID]:
     Jobs re-queued this way keep their already-incremented `attempts` count —
     a reaper requeue counts as a used attempt, same as any other failure.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=STALE_WORKER_THRESHOLD_SECONDS)
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        seconds=STALE_WORKER_THRESHOLD_SECONDS
+    )
     reaped_worker_ids: list[uuid.UUID] = []
     reaped_worker_orgs: dict[uuid.UUID, uuid.UUID] = {}
 
@@ -35,7 +37,9 @@ async def reap_once(redis_client: Redis | None = None) -> list[uuid.UUID]:
         stale_workers = (
             (
                 await db.execute(
-                    select(Worker).where(Worker.status != WorkerStatus.offline, Worker.last_seen < cutoff)
+                    select(Worker).where(
+                        Worker.status != WorkerStatus.offline, Worker.last_seen < cutoff
+                    )
                 )
             )
             .scalars()
@@ -62,7 +66,9 @@ async def reap_once(redis_client: Redis | None = None) -> list[uuid.UUID]:
         await db.commit()
 
     if reaped_worker_ids:
-        logger.info("Reaped %d stale worker(s): %s", len(reaped_worker_ids), reaped_worker_ids)
+        logger.info(
+            "Reaped %d stale worker(s): %s", len(reaped_worker_ids), reaped_worker_ids
+        )
 
     if redis_client is not None:
         for worker_id in reaped_worker_ids:
@@ -71,10 +77,15 @@ async def reap_once(redis_client: Redis | None = None) -> list[uuid.UUID]:
                 continue
             try:
                 await publish_event(
-                    redis_client, org_id, "worker.disconnected", {"worker_id": str(worker_id)}
+                    redis_client,
+                    org_id,
+                    "worker.disconnected",
+                    {"worker_id": str(worker_id)},
                 )
             except Exception:
-                logger.exception("Failed to publish worker.disconnected for %s", worker_id)
+                logger.exception(
+                    "Failed to publish worker.disconnected for %s", worker_id
+                )
 
     return reaped_worker_ids
 

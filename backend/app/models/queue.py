@@ -1,6 +1,15 @@
 import uuid
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,16 +20,22 @@ class Queue(Base, TimestampMixin):
     __tablename__ = "queues"
     __table_args__ = (
         Index("ix_queues_project_id_slug", "project_id", "slug", unique=True),
-        CheckConstraint("priority >= 0 AND priority <= 10", name="ck_queues_priority_range"),
+        CheckConstraint(
+            "priority >= 0 AND priority <= 10", name="ck_queues_priority_range"
+        ),
     )
 
     project_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=5, server_default=text("5"))
+    priority: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=5, server_default=text("5")
+    )
     concurrency_limit: Mapped[int] = mapped_column(
         Integer, nullable=False, default=10, server_default=text("10")
     )

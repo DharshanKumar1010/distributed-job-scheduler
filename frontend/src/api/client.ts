@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import type { ApiErrorBody } from '../types'
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000',
+  baseURL: import.meta.env.VITE_API_BASE_URL,
 })
 
 apiClient.interceptors.request.use((config) => {

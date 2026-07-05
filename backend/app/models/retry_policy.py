@@ -23,7 +23,9 @@ class RetryPolicy(Base, TimestampMixin):
     __tablename__ = "retry_policies"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default=text("3"))
+    max_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=3, server_default=text("3")
+    )
     strategy: Mapped[RetryStrategy] = mapped_column(
         retry_strategy_enum,
         nullable=False,

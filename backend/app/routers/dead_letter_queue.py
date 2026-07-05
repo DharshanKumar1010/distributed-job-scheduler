@@ -57,7 +57,9 @@ async def list_dlq_entries(
     )
 
 
-@router.post("/{entry_id}/resolve", response_model=DataResponse[DeadLetterQueueEntryOut])
+@router.post(
+    "/{entry_id}/resolve", response_model=DataResponse[DeadLetterQueueEntryOut]
+)
 async def resolve_dlq_entry(
     entry_id: uuid.UUID,
     current_user: User = Depends(require_permission(Permission.DLQ_RESOLVE)),
@@ -75,7 +77,9 @@ async def replay_dlq_entry(
     current_user: User = Depends(require_permission(Permission.DLQ_REPLAY)),
     db: AsyncSession = Depends(get_db),
 ):
-    job = await dead_letter_queue_service.replay_dlq_entry(db, current_user.org_id, entry_id)
+    job = await dead_letter_queue_service.replay_dlq_entry(
+        db, current_user.org_id, entry_id
+    )
     return DataResponse(data=JobOut.model_validate(job))
 
 
@@ -85,7 +89,9 @@ async def get_dlq_analysis(
     current_user: User = Depends(require_permission(Permission.DLQ_READ)),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await dead_letter_queue_service.get_dlq_analysis(db, current_user.org_id, entry_id)
+    result = await dead_letter_queue_service.get_dlq_analysis(
+        db, current_user.org_id, entry_id
+    )
     return DataResponse(data=DlqAnalysisOut(**result))
 
 
@@ -96,6 +102,10 @@ async def reanalyze_dlq_entry(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
-    entry, job = await dead_letter_queue_service.reanalyze_dlq_entry(db, current_user.org_id, entry_id)
-    asyncio.create_task(ai_service.run_dlq_analysis(entry.id, job.id, redis, current_user.org_id))
+    entry, job = await dead_letter_queue_service.reanalyze_dlq_entry(
+        db, current_user.org_id, entry_id
+    )
+    asyncio.create_task(
+        ai_service.run_dlq_analysis(entry.id, job.id, redis, current_user.org_id)
+    )
     return DataResponse(data={"status": "reanalyzing"})

@@ -9,7 +9,13 @@ from app.dependencies import get_db, get_redis, require_permission
 from app.models.queue import Queue
 from app.models.user import User
 from app.schemas.common import DataResponse, PaginatedResponse, PaginationMeta
-from app.schemas.queue import QueueCreate, QueueOut, QueueStats, QueueUpdate, RateLimitStatus
+from app.schemas.queue import (
+    QueueCreate,
+    QueueOut,
+    QueueStats,
+    QueueUpdate,
+    RateLimitStatus,
+)
 from app.services import project_service, queue_service
 from app.websocket.publisher import publish_event
 from app.worker import shard as shard_engine
@@ -23,7 +29,9 @@ async def _rate_limit_status(redis: Redis, queue: Queue) -> RateLimitStatus | No
         return None
     capacity = queue.rate_limit_burst or queue.rate_limit_per_minute
     refill_rate = queue.rate_limit_per_minute / 60.0
-    tokens_remaining = await peek_token_bucket(redis, queue_bucket_key(queue.id), capacity, refill_rate)
+    tokens_remaining = await peek_token_bucket(
+        redis, queue_bucket_key(queue.id), capacity, refill_rate
+    )
     return RateLimitStatus(
         limit_per_minute=queue.rate_limit_per_minute,
         burst_capacity=capacity,
@@ -71,7 +79,9 @@ async def list_queues(
     redis: Redis = Depends(get_redis),
 ):
     await project_service.get_project(db, current_user.org_id, project_id)
-    rows, total = await queue_service.list_queues_with_stats(db, project_id, page, limit)
+    rows, total = await queue_service.list_queues_with_stats(
+        db, project_id, page, limit
+    )
     return PaginatedResponse(
         data=[await _to_queue_out(redis, *row) for row in rows],
         meta=PaginationMeta(total=total, page=page, limit=limit),
@@ -79,7 +89,9 @@ async def list_queues(
 
 
 @router.post(
-    "/{project_id}/queues", response_model=DataResponse[QueueOut], status_code=status.HTTP_201_CREATED
+    "/{project_id}/queues",
+    response_model=DataResponse[QueueOut],
+    status_code=status.HTTP_201_CREATED,
 )
 async def create_queue(
     project_id: uuid.UUID,
@@ -151,7 +163,9 @@ async def delete_queue(
     return DataResponse(data=await _to_queue_out(redis, queue, *stats))
 
 
-@router.post("/{project_id}/queues/{queue_id}/pause", response_model=DataResponse[QueueOut])
+@router.post(
+    "/{project_id}/queues/{queue_id}/pause", response_model=DataResponse[QueueOut]
+)
 async def pause_queue(
     project_id: uuid.UUID,
     queue_id: uuid.UUID,
@@ -165,7 +179,9 @@ async def pause_queue(
     return DataResponse(data=await _to_queue_out(redis, queue, *stats))
 
 
-@router.post("/{project_id}/queues/{queue_id}/resume", response_model=DataResponse[QueueOut])
+@router.post(
+    "/{project_id}/queues/{queue_id}/resume", response_model=DataResponse[QueueOut]
+)
 async def resume_queue(
     project_id: uuid.UUID,
     queue_id: uuid.UUID,

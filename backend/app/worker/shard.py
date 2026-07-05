@@ -17,8 +17,7 @@ ACTIVE_WINDOW_SECONDS = 45
 # [0, shard_count) so every job maps to exactly one real shard.
 _SHARD_EXPR = "(((hashtext(id::text) % :shard_count) + :shard_count) % :shard_count)"
 
-SHARD_STATS_QUERY = text(
-    f"""
+SHARD_STATS_QUERY = text(f"""
     SELECT
       {_SHARD_EXPR} as shard_id,
       COUNT(*) FILTER (WHERE status = 'queued') as pending,
@@ -26,8 +25,7 @@ SHARD_STATS_QUERY = text(
     FROM jobs
     WHERE queue_id = :queue_id
     GROUP BY shard_id
-    """
-)
+    """)
 
 
 @dataclass
@@ -47,12 +45,18 @@ def _shard_for_position(position: int, shard_count: int) -> int:
     return position % shard_count if shard_count > 0 else 0
 
 
-async def _active_sorted_workers(redis: Redis, queue_id: uuid.UUID, now: float) -> list[str]:
-    raw = await redis.zrangebyscore(workers_key(queue_id), now - ACTIVE_WINDOW_SECONDS, "+inf")
+async def _active_sorted_workers(
+    redis: Redis, queue_id: uuid.UUID, now: float
+) -> list[str]:
+    raw = await redis.zrangebyscore(
+        workers_key(queue_id), now - ACTIVE_WINDOW_SECONDS, "+inf"
+    )
     return sorted(raw)
 
 
-def compute_shard_map(active_sorted: list[str], shard_count: int) -> dict[int, list[str]]:
+def compute_shard_map(
+    active_sorted: list[str], shard_count: int
+) -> dict[int, list[str]]:
     shard_map: dict[int, list[str]] = {i: [] for i in range(shard_count)}
     for position, worker_id in enumerate(active_sorted):
         shard_map[_shard_for_position(position, shard_count)].append(worker_id)
@@ -115,8 +119,14 @@ async def get_shard_distribution(
     shard_map = compute_shard_map(active_sorted, shard_count)
 
     rows = (
-        await db.execute(SHARD_STATS_QUERY, {"queue_id": queue_id, "shard_count": shard_count})
-    ).mappings().all()
+        (
+            await db.execute(
+                SHARD_STATS_QUERY, {"queue_id": queue_id, "shard_count": shard_count}
+            )
+        )
+        .mappings()
+        .all()
+    )
     stats_by_shard = {row["shard_id"]: row for row in rows}
 
     shards = []
@@ -129,7 +139,12 @@ async def get_shard_distribution(
         if not workers and pending > 0:
             unassigned_jobs += pending
         shards.append(
-            {"shard_id": shard_id, "workers": workers, "pending_jobs": pending, "running_jobs": running}
+            {
+                "shard_id": shard_id,
+                "workers": workers,
+                "pending_jobs": pending,
+                "running_jobs": running,
+            }
         )
 
     total_active_workers = len(active_sorted)

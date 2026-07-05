@@ -91,13 +91,17 @@ async def resolve_dlq_entry(
     return entry, job
 
 
-async def replay_dlq_entry(db: AsyncSession, org_id: uuid.UUID, entry_id: uuid.UUID) -> Job:
+async def replay_dlq_entry(
+    db: AsyncSession, org_id: uuid.UUID, entry_id: uuid.UUID
+) -> Job:
     entry, _job = await get_dlq_entry_for_org(db, org_id, entry_id)
     # retry_job() resets the job to queued and deletes any DLQ entry for it.
     return await job_service.retry_job(db, org_id, entry.job_id)
 
 
-async def get_dlq_analysis(db: AsyncSession, org_id: uuid.UUID, entry_id: uuid.UUID) -> dict:
+async def get_dlq_analysis(
+    db: AsyncSession, org_id: uuid.UUID, entry_id: uuid.UUID
+) -> dict:
     entry, job = await get_dlq_entry_for_org(db, org_id, entry_id)
 
     executions = list(
@@ -129,7 +133,9 @@ async def get_dlq_analysis(db: AsyncSession, org_id: uuid.UUID, entry_id: uuid.U
         "ai_summary": entry.ai_summary,
         "is_generating": entry.ai_summary is None,
         "total_attempts": entry.total_attempts,
-        "time_to_failure_ms": int((entry.failed_at - job.created_at).total_seconds() * 1000),
+        "time_to_failure_ms": int(
+            (entry.failed_at - job.created_at).total_seconds() * 1000
+        ),
         "execution_pattern": execution_pattern,
     }
 

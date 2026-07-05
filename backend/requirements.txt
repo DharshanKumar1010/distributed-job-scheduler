@@ -1,19 +1,33 @@
+# Web framework
 fastapi==0.111.0
 uvicorn[standard]
+
+# Database
 sqlalchemy[asyncio]==2.0.30
 asyncpg
 alembic
-pydantic-settings
+
+# Auth
 python-jose[cryptography]
 passlib[bcrypt]
 bcrypt==4.0.1
 email-validator
+
+# Task processing
 redis[asyncio]
 croniter
+psutil
+
+# AI
+anthropic
+
+# Config
+pydantic-settings
+
+# Testing
 httpx
 pytest
 pytest-asyncio
-pytest-httpx
-anthropic
-psutil
+
+# Docs / reporting
 reportlab

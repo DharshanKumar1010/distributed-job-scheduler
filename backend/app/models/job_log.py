@@ -17,7 +17,9 @@ class LogLevel(str, enum.Enum):
 
 
 log_level_enum = Enum(
-    LogLevel, name="log_level", values_callable=lambda enum_cls: [e.value for e in enum_cls]
+    LogLevel,
+    name="log_level",
+    values_callable=lambda enum_cls: [e.value for e in enum_cls],
 )
 
 

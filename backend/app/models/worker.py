@@ -2,7 +2,17 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, Index, Integer, String, text
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +26,9 @@ class WorkerStatus(str, enum.Enum):
 
 
 worker_status_enum = Enum(
-    WorkerStatus, name="worker_status", values_callable=lambda enum_cls: [e.value for e in enum_cls]
+    WorkerStatus,
+    name="worker_status",
+    values_callable=lambda enum_cls: [e.value for e in enum_cls],
 )
 
 
@@ -40,7 +52,9 @@ class Worker(Base, TimestampMixin):
     current_jobs: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )
-    last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     extra_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
 
 
@@ -51,7 +65,9 @@ class WorkerHeartbeat(Base, TimestampMixin):
     worker_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False
     )
-    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    ts: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
     cpu_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     mem_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     active_job_count: Mapped[int] = mapped_column(

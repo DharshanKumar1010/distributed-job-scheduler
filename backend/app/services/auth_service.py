@@ -26,9 +26,13 @@ async def register_organization(
     password: str,
     full_name: str | None,
 ) -> tuple[Organization, User]:
-    existing_org = await db.scalar(select(Organization).where(Organization.slug == org_slug))
+    existing_org = await db.scalar(
+        select(Organization).where(Organization.slug == org_slug)
+    )
     if existing_org is not None:
-        raise APIError(409, "ORG_SLUG_TAKEN", "An organization with this slug already exists")
+        raise APIError(
+            409, "ORG_SLUG_TAKEN", "An organization with this slug already exists"
+        )
 
     existing_user = await db.scalar(select(User).where(User.email == email))
     if existing_user is not None:
@@ -54,6 +58,10 @@ async def register_organization(
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> User:
     user = await db.scalar(select(User).where(User.email == email))
-    if user is None or not user.is_active or not verify_password(password, user.hashed_password):
+    if (
+        user is None
+        or not user.is_active
+        or not verify_password(password, user.hashed_password)
+    ):
         raise APIError(401, "INVALID_CREDENTIALS", "Invalid email or password")
     return user

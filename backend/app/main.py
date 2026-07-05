@@ -75,12 +75,16 @@ app.include_router(websocket_router, prefix="/ws")
 async def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": {"code": exc.code, "message": exc.message, "details": exc.details}},
+        content={
+            "error": {"code": exc.code, "message": exc.message, "details": exc.details}
+        },
     )
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_error_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     return JSONResponse(
         status_code=422,
         content={
@@ -88,6 +92,21 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
                 "code": "VALIDATION_ERROR",
                 "message": "Request validation failed",
                 "details": {"errors": jsonable_encoder(exc.errors())},
+            }
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "An unexpected error occurred",
+                "details": {},
             }
         },
     )

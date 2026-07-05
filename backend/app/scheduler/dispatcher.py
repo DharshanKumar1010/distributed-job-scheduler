@@ -9,7 +9,12 @@ from sqlalchemy import text, update
 from app.database import AsyncSessionLocal, engine
 from app.models.job import Job, JobStatus, JobType
 from app.models.scheduled_job import ScheduledJob
-from app.scheduler.locks import SCHEDULER_LOCK_ID, RedisLock, acquire_advisory_lock, release_advisory_lock
+from app.scheduler.locks import (
+    SCHEDULER_LOCK_ID,
+    RedisLock,
+    acquire_advisory_lock,
+    release_advisory_lock,
+)
 
 logger = logging.getLogger("dispatcher")
 
@@ -26,8 +31,7 @@ CRON_LOCK_TTL_SECONDS = 55
 # ever a config source for the cron scheduler below (which clones it into a
 # fresh `immediate` job each time it's due) and must never become claimable
 # and executed itself.
-MATERIALIZE_QUERY = text(
-    """
+MATERIALIZE_QUERY = text("""
     UPDATE jobs
     SET status = 'queued', scheduled_at = NULL
     WHERE id IN (
@@ -36,18 +40,15 @@ MATERIALIZE_QUERY = text(
         FOR UPDATE SKIP LOCKED
     )
     RETURNING id
-    """
-)
+    """)
 
 # Claims due recurring-job templates so multiple dispatcher instances never
 # fire the same cron occurrence twice.
-CRON_CLAIM_QUERY = text(
-    """
+CRON_CLAIM_QUERY = text("""
     SELECT id, job_id, cron_expression FROM scheduled_jobs
     WHERE is_active = true AND next_run_at <= now()
     FOR UPDATE SKIP LOCKED
-    """
-)
+    """)
 
 
 async def _run_materializer_once() -> int:
@@ -71,7 +72,11 @@ async def _fire_due_cron_row(db, row, redis_client: Redis | None) -> bool:
     LOCKED windows don't overlap. Returns True iff this call fired it.
     """
     now = datetime.now(timezone.utc)
-    lock = RedisLock(_cron_lock_key(row["id"], now), ttl_seconds=CRON_LOCK_TTL_SECONDS, redis=redis_client)
+    lock = RedisLock(
+        _cron_lock_key(row["id"], now),
+        ttl_seconds=CRON_LOCK_TTL_SECONDS,
+        redis=redis_client,
+    )
 
     if redis_client is not None:
         acquired = await lock.acquire()
@@ -150,7 +155,9 @@ async def run_dispatcher(redis_client: Redis | None = None) -> None:
     await asyncio.gather(run_materializer_loop(), run_cron_scheduler_loop(redis_client))
 
 
-async def run_dispatcher_with_leader_election(redis_client: Redis | None = None) -> None:
+async def run_dispatcher_with_leader_election(
+    redis_client: Redis | None = None,
+) -> None:
     """Only one dispatcher process actually runs the materializer/cron loops
     (the PRIMARY); every other instance is a STANDBY that just polls for the
     Postgres advisory lock. If the primary's connection dies (crash, restart),
@@ -167,10 +174,16 @@ async def run_dispatcher_with_leader_election(redis_client: Redis | None = None)
                     acquired = await acquire_advisory_lock(conn, SCHEDULER_LOCK_ID)
                     if acquired:
                         is_leader = True
-                        logger.info("Dispatcher: acquired leader lock, running as PRIMARY")
-                        dispatcher_task = asyncio.create_task(run_dispatcher(redis_client))
+                        logger.info(
+                            "Dispatcher: acquired leader lock, running as PRIMARY"
+                        )
+                        dispatcher_task = asyncio.create_task(
+                            run_dispatcher(redis_client)
+                        )
                     else:
-                        logger.info("Dispatcher: lock not available, running as STANDBY")
+                        logger.info(
+                            "Dispatcher: lock not available, running as STANDBY"
+                        )
                 if is_leader and dispatcher_task is not None and dispatcher_task.done():
                     # The primary's own loops don't return in normal operation;
                     # if they did (crashed), fall back to re-contending the lock.

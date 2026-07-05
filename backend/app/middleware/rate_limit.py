@@ -80,8 +80,12 @@ async def check_sliding_window(
     script = _get_script(redis_client)
     now = now_ms if now_ms is not None else time.time() * 1000
     req_id = str(uuid.uuid4())
-    allowed, count, reset_at = await script(keys=[key], args=[str(now), str(window_ms), str(limit), req_id])
-    return RateLimitResult(allowed=bool(allowed), count=int(count), reset_at_ms=float(reset_at))
+    allowed, count, reset_at = await script(
+        keys=[key], args=[str(now), str(window_ms), str(limit), req_id]
+    )
+    return RateLimitResult(
+        allowed=bool(allowed), count=int(count), reset_at_ms=float(reset_at)
+    )
 
 
 def build_429_headers(limit: int, result: RateLimitResult) -> dict[str, str]:
@@ -100,7 +104,9 @@ def classify_endpoint(method: str, path: str) -> str:
         return "auth"
     if method == "POST" and (_JOB_WRITE_RE.match(path) or path == "/workflows"):
         return "job_write"
-    if method == "GET" and (_JOB_READ_LIST_RE.match(path) or _JOB_DETAIL_RE.match(path)):
+    if method == "GET" and (
+        _JOB_READ_LIST_RE.match(path) or _JOB_DETAIL_RE.match(path)
+    ):
         return "job_read"
     if method in ("POST", "PATCH", "DELETE") and _QUEUE_WRITE_RE.match(path):
         return "queue_write"
@@ -123,7 +129,9 @@ def _resolve_identity(request: Request) -> str:
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         path = request.url.path
         if request.method == "OPTIONS" or any(
             path == prefix or path.startswith(prefix + "/") for prefix in SKIP_PREFIXES

@@ -13,7 +13,9 @@ class ConnectionManager:
         self.connections: dict[str, set[WebSocket]] = defaultdict(set)
         self._socket_org: dict[WebSocket, str] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: uuid.UUID, org_id: uuid.UUID) -> None:
+    async def connect(
+        self, websocket: WebSocket, user_id: uuid.UUID, org_id: uuid.UUID
+    ) -> None:
         org_key = str(org_id)
         self.connections[org_key].add(websocket)
         self._socket_org[websocket] = org_key

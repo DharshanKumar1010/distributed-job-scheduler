@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
 
 
-def compute_next_run(strategy: str, base_delay: int, attempt: int, max_delay: int) -> datetime:
+def compute_next_run(
+    strategy: str, base_delay: int, attempt: int, max_delay: int
+) -> datetime:
     if strategy == "fixed":
         delta = base_delay
     elif strategy == "linear":

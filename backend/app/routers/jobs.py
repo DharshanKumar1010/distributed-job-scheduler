@@ -69,7 +69,15 @@ async def list_jobs(
     db: AsyncSession = Depends(get_db),
 ):
     jobs, total = await job_service.list_jobs(
-        db, current_user.org_id, queue_id, status_filter, job_type, tag, page, limit, sort
+        db,
+        current_user.org_id,
+        queue_id,
+        status_filter,
+        job_type,
+        tag,
+        page,
+        limit,
+        sort,
     )
     return PaginatedResponse(
         data=[JobOut.model_validate(j) for j in jobs],
@@ -83,7 +91,9 @@ async def get_job(
     current_user: User = Depends(require_permission(Permission.JOB_READ)),
     db: AsyncSession = Depends(get_db),
 ):
-    job, executions, logs = await job_service.get_job_detail(db, current_user.org_id, job_id)
+    job, executions, logs = await job_service.get_job_detail(
+        db, current_user.org_id, job_id
+    )
     return DataResponse(data=_build_detail(job, executions, logs))
 
 
@@ -115,7 +125,9 @@ async def get_job_logs(
     current_user: User = Depends(require_permission(Permission.JOB_VIEW_LOGS)),
     db: AsyncSession = Depends(get_db),
 ):
-    logs, total = await job_service.get_job_logs(db, current_user.org_id, job_id, page, limit)
+    logs, total = await job_service.get_job_logs(
+        db, current_user.org_id, job_id, page, limit
+    )
     return PaginatedResponse(
         data=[JobLogOut.model_validate(log) for log in logs],
         meta=PaginationMeta(total=total, page=page, limit=limit),
@@ -128,11 +140,15 @@ async def batch_cancel_jobs(
     current_user: User = Depends(require_permission(Permission.JOB_CANCEL)),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await job_service.batch_cancel_jobs(db, current_user.org_id, payload.job_ids)
+    result = await job_service.batch_cancel_jobs(
+        db, current_user.org_id, payload.job_ids
+    )
     return DataResponse(data=BatchCancelResult(**result))
 
 
-@router.get("/jobs/{job_id}/dependencies", response_model=DataResponse[DependencyGraphOut])
+@router.get(
+    "/jobs/{job_id}/dependencies", response_model=DataResponse[DependencyGraphOut]
+)
 async def get_job_dependencies(
     job_id: uuid.UUID,
     current_user: User = Depends(require_permission(Permission.WORKFLOW_READ)),
@@ -143,11 +159,15 @@ async def get_job_dependencies(
     all_ids = dependency_service.collect_all_job_ids(graph)
     workflow_status = await dependency_service.get_workflow_status(all_ids, db)
     return DataResponse(
-        data=DependencyGraphOut.model_validate({**graph, "workflow_status": workflow_status})
+        data=DependencyGraphOut.model_validate(
+            {**graph, "workflow_status": workflow_status}
+        )
     )
 
 
-@router.get("/jobs/{job_id}/dependents", response_model=DataResponse[list[DependentOut]])
+@router.get(
+    "/jobs/{job_id}/dependents", response_model=DataResponse[list[DependentOut]]
+)
 async def get_job_dependents(
     job_id: uuid.UUID,
     current_user: User = Depends(require_permission(Permission.WORKFLOW_READ)),
@@ -171,14 +191,18 @@ async def add_job_dependency(
     return DataResponse(data=JobOut.model_validate(job))
 
 
-@router.delete("/jobs/{job_id}/dependencies/{dep_job_id}", response_model=DataResponse[JobOut])
+@router.delete(
+    "/jobs/{job_id}/dependencies/{dep_job_id}", response_model=DataResponse[JobOut]
+)
 async def remove_job_dependency(
     job_id: uuid.UUID,
     dep_job_id: uuid.UUID,
     current_user: User = Depends(require_permission(Permission.WORKFLOW_CREATE)),
     db: AsyncSession = Depends(get_db),
 ):
-    job = await job_service.remove_dependency(db, current_user.org_id, job_id, dep_job_id)
+    job = await job_service.remove_dependency(
+        db, current_user.org_id, job_id, dep_job_id
+    )
     return DataResponse(data=JobOut.model_validate(job))
 
 

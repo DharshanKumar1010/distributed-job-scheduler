@@ -35,7 +35,9 @@ async def get_retry_policy(db: AsyncSession, policy_id: uuid.UUID) -> RetryPolic
     return policy
 
 
-async def update_retry_policy(db: AsyncSession, policy_id: uuid.UUID, data: dict) -> RetryPolicy:
+async def update_retry_policy(
+    db: AsyncSession, policy_id: uuid.UUID, data: dict
+) -> RetryPolicy:
     policy = await get_retry_policy(db, policy_id)
     for field, value in data.items():
         setattr(policy, field, value)

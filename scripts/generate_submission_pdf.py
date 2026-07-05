@@ -411,7 +411,7 @@ RETURNING *;"""
         ("Database Tables", "13"),
         ("Automated Tests", "33 (all passing)"),
         ("Job Types Supported", "5"),
-        ("WebSocket Events", "17"),
+        ("WebSocket Events", "15"),
         ("RBAC Permissions", "29"),
         ("Retry Strategies", "3"),
         ("Max Queue Shards", "64"),
@@ -537,7 +537,7 @@ def page_4_feature_checklist(c):
         ("React Dashboard", "8 pages, dark theme"),
     ]
     bonus = [
-        ("WebSocket Updates", "17 event types, org-scoped fanout"),
+        ("WebSocket Updates", "15 event types, org-scoped fanout"),
         ("Live DAG Canvas", "Pure SVG, animated edges, real-time"),
         ("Workflow API", "POST /workflows for diamond patterns"),
         ("Dep Cycle Detection", "Iterative DFS with cycle path"),

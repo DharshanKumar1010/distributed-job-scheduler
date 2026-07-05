@@ -11,15 +11,22 @@ from app.models.user import User
 from app.models.worker import Worker
 from app.schemas.ai import FailurePatternOut
 from app.schemas.common import DataResponse
-from app.schemas.shard import RebalanceResult, ShardDistributionOut, ShardOut, ShardWorkerOut
+from app.schemas.shard import (
+    RebalanceResult,
+    ShardDistributionOut,
+    ShardOut,
+    ShardWorkerOut,
+)
 from app.services import ai_service, queue_service
-from app.worker import shard as shard_engine
 from app.websocket.publisher import publish_event
+from app.worker import shard as shard_engine
 
 router = APIRouter(tags=["shards"])
 
 
-@router.get("/queues/{queue_id}/shards", response_model=DataResponse[ShardDistributionOut])
+@router.get(
+    "/queues/{queue_id}/shards", response_model=DataResponse[ShardDistributionOut]
+)
 async def get_shards(
     queue_id: uuid.UUID,
     current_user: User = Depends(require_permission(Permission.QUEUE_READ)),
@@ -27,12 +34,20 @@ async def get_shards(
     redis: Redis = Depends(get_redis),
 ):
     queue = await queue_service.get_queue_for_org(db, current_user.org_id, queue_id)
-    distribution = await shard_engine.get_shard_distribution(queue_id, queue.shard_count, db, redis)
+    distribution = await shard_engine.get_shard_distribution(
+        queue_id, queue.shard_count, db, redis
+    )
 
-    worker_ids = {uuid.UUID(wid) for s in distribution["shards"] for wid in s["workers"]}
+    worker_ids = {
+        uuid.UUID(wid) for s in distribution["shards"] for wid in s["workers"]
+    }
     workers_by_id: dict[uuid.UUID, Worker] = {}
     if worker_ids:
-        rows = (await db.execute(select(Worker).where(Worker.id.in_(worker_ids)))).scalars().all()
+        rows = (
+            (await db.execute(select(Worker).where(Worker.id.in_(worker_ids))))
+            .scalars()
+            .all()
+        )
         workers_by_id = {w.id: w for w in rows}
 
     shards_out = [
@@ -61,7 +76,9 @@ async def get_shards(
     )
 
 
-@router.post("/queues/{queue_id}/shards/rebalance", response_model=DataResponse[RebalanceResult])
+@router.post(
+    "/queues/{queue_id}/shards/rebalance", response_model=DataResponse[RebalanceResult]
+)
 async def rebalance_shards(
     queue_id: uuid.UUID,
     current_user: User = Depends(require_permission(Permission.QUEUE_CONFIGURE)),
@@ -76,10 +93,15 @@ async def rebalance_shards(
         "queue.rebalancing",
         {"queue_id": str(queue_id), "queue_name": queue.name},
     )
-    return DataResponse(data=RebalanceResult(status="rebalancing", expected_completion_seconds=15))
+    return DataResponse(
+        data=RebalanceResult(status="rebalancing", expected_completion_seconds=15)
+    )
 
 
-@router.get("/queues/{queue_id}/failure-patterns", response_model=DataResponse[FailurePatternOut])
+@router.get(
+    "/queues/{queue_id}/failure-patterns",
+    response_model=DataResponse[FailurePatternOut],
+)
 async def get_failure_patterns(
     queue_id: uuid.UUID,
     current_user: User = Depends(require_permission(Permission.DLQ_READ)),

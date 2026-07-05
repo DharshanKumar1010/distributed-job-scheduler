@@ -20,8 +20,7 @@ MAX_UNBLOCK_DEPTH = 50
 # Ancestors: everything `root_id` (transitively) depends on. Mirror image of
 # DESCENDANTS_CTE below — walks from a node already in the tree to jobs it
 # points at via job_dependencies.depends_on_job_id.
-_ANCESTORS_CTE = text(
-    """
+_ANCESTORS_CTE = text("""
     WITH RECURSIVE dep_tree AS (
         SELECT j.id, j.name, j.status, 0 as depth
         FROM jobs j
@@ -34,12 +33,10 @@ _ANCESTORS_CTE = text(
         WHERE dt.depth < :max_depth
     )
     SELECT id, name, status, depth FROM dep_tree ORDER BY depth
-    """
-)
+    """)
 
 # Descendants: everything that (transitively) depends on `root_id`.
-_DESCENDANTS_CTE = text(
-    """
+_DESCENDANTS_CTE = text("""
     WITH RECURSIVE dep_tree AS (
         SELECT j.id, j.name, j.status, j.parent_job_id, 0 as depth
         FROM jobs j
@@ -52,16 +49,15 @@ _DESCENDANTS_CTE = text(
         WHERE dt.depth < :max_depth
     )
     SELECT id, name, status, depth FROM dep_tree ORDER BY depth
-    """
-)
+    """)
 
 
 async def get_direct_dependencies(job_id: uuid.UUID, db: AsyncSession) -> list[Job]:
     """Jobs that `job_id` directly depends on (one hop)."""
     result = await db.execute(
-        select(Job).join(JobDependency, JobDependency.depends_on_job_id == Job.id).where(
-            JobDependency.job_id == job_id
-        )
+        select(Job)
+        .join(JobDependency, JobDependency.depends_on_job_id == Job.id)
+        .where(JobDependency.job_id == job_id)
     )
     return list(result.scalars().all())
 
@@ -69,14 +65,16 @@ async def get_direct_dependencies(job_id: uuid.UUID, db: AsyncSession) -> list[J
 async def get_direct_dependents(job_id: uuid.UUID, db: AsyncSession) -> list[Job]:
     """Jobs that directly depend on `job_id` (one hop)."""
     result = await db.execute(
-        select(Job).join(JobDependency, JobDependency.job_id == Job.id).where(
-            JobDependency.depends_on_job_id == job_id
-        )
+        select(Job)
+        .join(JobDependency, JobDependency.job_id == Job.id)
+        .where(JobDependency.depends_on_job_id == job_id)
     )
     return list(result.scalars().all())
 
 
-async def get_direct_dependents_with_status(job_id: uuid.UUID, db: AsyncSession) -> list[dict]:
+async def get_direct_dependents_with_status(
+    job_id: uuid.UUID, db: AsyncSession
+) -> list[dict]:
     """Direct (one-hop) dependents of `job_id`, each annotated with whether
     it's ALSO waiting on some other, unrelated dependency.
     """
@@ -106,12 +104,15 @@ async def get_direct_dependents_with_status(job_id: uuid.UUID, db: AsyncSession)
     return output
 
 
-async def _edges_among(db: AsyncSession, node_ids: set[uuid.UUID]) -> list[tuple[uuid.UUID, uuid.UUID]]:
+async def _edges_among(
+    db: AsyncSession, node_ids: set[uuid.UUID]
+) -> list[tuple[uuid.UUID, uuid.UUID]]:
     if not node_ids:
         return []
     result = await db.execute(
         select(JobDependency.job_id, JobDependency.depends_on_job_id).where(
-            JobDependency.job_id.in_(node_ids), JobDependency.depends_on_job_id.in_(node_ids)
+            JobDependency.job_id.in_(node_ids),
+            JobDependency.depends_on_job_id.in_(node_ids),
         )
     )
     return list(result.all())
@@ -126,7 +127,12 @@ def _build_nested(
 ) -> dict:
     node = nodes_by_id[node_id]
     if node_id in visited:
-        return {"job_id": node["id"], "name": node["name"], "status": node["status"], key: []}
+        return {
+            "job_id": node["id"],
+            "name": node["name"],
+            "status": node["status"],
+            key: [],
+        }
     visited = visited | {node_id}
 
     children = [
@@ -134,7 +140,12 @@ def _build_nested(
         for child_id in children_by_parent.get(node_id, [])
         if child_id in nodes_by_id
     ]
-    return {"job_id": node["id"], "name": node["name"], "status": node["status"], key: children}
+    return {
+        "job_id": node["id"],
+        "name": node["name"],
+        "status": node["status"],
+        key: children,
+    }
 
 
 async def get_dependency_graph(job_id: uuid.UUID, db: AsyncSession) -> dict:
@@ -143,11 +154,23 @@ async def get_dependency_graph(job_id: uuid.UUID, db: AsyncSession) -> dict:
     (one per direction) instead of N+1 per-node queries.
     """
     ancestor_rows = (
-        await db.execute(_ANCESTORS_CTE, {"root_id": job_id, "max_depth": MAX_GRAPH_DEPTH})
-    ).mappings().all()
+        (
+            await db.execute(
+                _ANCESTORS_CTE, {"root_id": job_id, "max_depth": MAX_GRAPH_DEPTH}
+            )
+        )
+        .mappings()
+        .all()
+    )
     descendant_rows = (
-        await db.execute(_DESCENDANTS_CTE, {"root_id": job_id, "max_depth": MAX_GRAPH_DEPTH})
-    ).mappings().all()
+        (
+            await db.execute(
+                _DESCENDANTS_CTE, {"root_id": job_id, "max_depth": MAX_GRAPH_DEPTH}
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     root_row = ancestor_rows[0] if ancestor_rows else descendant_rows[0]
 
@@ -172,8 +195,12 @@ async def get_dependency_graph(job_id: uuid.UUID, db: AsyncSession) -> dict:
     for child_id, parent_id in dependent_edges:
         dependents_children.setdefault(parent_id, []).append(child_id)
 
-    depends_on_tree = _build_nested(job_id, nodes_by_id, depends_on_children, "depends_on", set())
-    dependents_tree = _build_nested(job_id, nodes_by_id, dependents_children, "dependents", set())
+    depends_on_tree = _build_nested(
+        job_id, nodes_by_id, depends_on_children, "depends_on", set()
+    )
+    dependents_tree = _build_nested(
+        job_id, nodes_by_id, dependents_children, "dependents", set()
+    )
 
     return {
         "job_id": root_row["id"],
@@ -204,7 +231,9 @@ async def detect_cycle(
     Avoids Python's recursion limit on deep/pathological graphs.
     """
     visited: set[uuid.UUID] = set()
-    stack: list[tuple[uuid.UUID, list[str]]] = [(dep_id, [str(dep_id)]) for dep_id in depends_on_ids]
+    stack: list[tuple[uuid.UUID, list[str]]] = [
+        (dep_id, [str(dep_id)]) for dep_id in depends_on_ids
+    ]
 
     while stack:
         current_id, path = stack.pop()
@@ -241,7 +270,9 @@ async def get_workflow_status(job_ids: list[uuid.UUID], db: AsyncSession) -> dic
         await db.execute(
             select(
                 func.count().label("total"),
-                func.count().filter(Job.status == JobStatus.completed).label("completed"),
+                func.count()
+                .filter(Job.status == JobStatus.completed)
+                .label("completed"),
                 func.count().filter(Job.status == JobStatus.running).label("running"),
                 func.count().filter(Job.status == JobStatus.blocked).label("blocked"),
                 func.count().filter(Job.status == JobStatus.failed).label("failed"),
@@ -283,7 +314,11 @@ async def check_and_unblock(
     resolved concurrently via asyncio.gather.
     """
     if _depth >= MAX_UNBLOCK_DEPTH:
-        logger.warning("check_and_unblock exceeded max depth %d at %s", MAX_UNBLOCK_DEPTH, completed_job_id)
+        logger.warning(
+            "check_and_unblock exceeded max depth %d at %s",
+            MAX_UNBLOCK_DEPTH,
+            completed_job_id,
+        )
         return []
 
     completed_job = await db.get(Job, completed_job_id)
@@ -291,7 +326,10 @@ async def check_and_unblock(
     candidates_result = await db.execute(
         select(Job)
         .join(JobDependency, JobDependency.job_id == Job.id)
-        .where(JobDependency.depends_on_job_id == completed_job_id, Job.status == JobStatus.blocked)
+        .where(
+            JobDependency.depends_on_job_id == completed_job_id,
+            Job.status == JobStatus.blocked,
+        )
     )
     candidates = list(candidates_result.scalars().all())
 
@@ -301,7 +339,9 @@ async def check_and_unblock(
             select(func.count())
             .select_from(JobDependency)
             .join(Job, Job.id == JobDependency.depends_on_job_id)
-            .where(JobDependency.job_id == candidate.id, Job.status != JobStatus.completed)
+            .where(
+                JobDependency.job_id == candidate.id, Job.status != JobStatus.completed
+            )
         )
         if (remaining or 0) != 0:
             continue
@@ -328,7 +368,9 @@ async def check_and_unblock(
                         "name": candidate.name,
                         "queue_id": str(candidate.queue_id),
                         "unblocked_by": str(completed_job_id),
-                        "unblocked_by_name": completed_job.name if completed_job else None,
+                        "unblocked_by_name": (
+                            completed_job.name if completed_job else None
+                        ),
                     },
                 )
             except Exception:
@@ -341,7 +383,10 @@ async def check_and_unblock(
         # cannot be driven concurrently, and gather() below runs these
         # branches (e.g. a diamond's two arms) in parallel.
         await asyncio.gather(
-            *[_check_and_unblock_isolated(jid, redis, org_id, _depth + 1) for jid in unblocked_ids]
+            *[
+                _check_and_unblock_isolated(jid, redis, org_id, _depth + 1)
+                for jid in unblocked_ids
+            ]
         )
 
     return unblocked_ids

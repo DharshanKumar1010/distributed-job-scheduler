@@ -23,7 +23,7 @@ import type {
 const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000]
 
 function resolveWsUrl(token: string): string {
-  const base: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+  const base: string = import.meta.env.VITE_API_BASE_URL
   const wsBase = base.replace(/^http/, 'ws')
   return `${wsBase}/ws/connect?token=${encodeURIComponent(token)}`
 }

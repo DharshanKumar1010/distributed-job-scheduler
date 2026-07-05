@@ -11,7 +11,9 @@ from app.models.job import JobStatus, job_status_enum
 
 class JobExecution(Base, TimestampMixin):
     __tablename__ = "job_executions"
-    __table_args__ = (Index("ix_job_executions_job_id_attempt_number", "job_id", "attempt_number"),)
+    __table_args__ = (
+        Index("ix_job_executions_job_id_attempt_number", "job_id", "attempt_number"),
+    )
 
     job_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
@@ -21,8 +23,12 @@ class JobExecution(Base, TimestampMixin):
     )
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[JobStatus] = mapped_column(job_status_enum, nullable=False)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_traceback: Mapped[str | None] = mapped_column(Text, nullable=True)

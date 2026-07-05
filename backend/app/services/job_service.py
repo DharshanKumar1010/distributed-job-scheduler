@@ -16,7 +16,11 @@ from app.models.project import Project
 from app.models.queue import Queue
 from app.models.scheduled_job import ScheduledJob
 from app.schemas.job import JobCreateRequest
-from app.schemas.workflow import WorkflowCreateRequest, WorkflowCreateResult, WorkflowJobResult
+from app.schemas.workflow import (
+    WorkflowCreateRequest,
+    WorkflowCreateResult,
+    WorkflowJobResult,
+)
 from app.services import dependency_service, queue_service
 
 CANCELLABLE_STATUSES = {JobStatus.queued, JobStatus.scheduled, JobStatus.blocked}
@@ -24,7 +28,9 @@ ACTIVE_STATUSES = {JobStatus.claimed, JobStatus.running}
 RETRYABLE_STATUSES = {JobStatus.failed, JobStatus.dead}
 
 
-async def get_job_for_org(db: AsyncSession, org_id: uuid.UUID, job_id: uuid.UUID) -> Job:
+async def get_job_for_org(
+    db: AsyncSession, org_id: uuid.UUID, job_id: uuid.UUID
+) -> Job:
     job = await db.scalar(
         select(Job)
         .join(Queue, Queue.id == Job.queue_id)
@@ -56,7 +62,9 @@ async def _verify_dependencies_exist(
         )
 
 
-async def _dependencies_completed(db: AsyncSession, depends_on: list[uuid.UUID]) -> bool:
+async def _dependencies_completed(
+    db: AsyncSession, depends_on: list[uuid.UUID]
+) -> bool:
     incomplete = await db.scalar(
         select(func.count())
         .select_from(Job)
@@ -65,12 +73,16 @@ async def _dependencies_completed(db: AsyncSession, depends_on: list[uuid.UUID])
     return (incomplete or 0) == 0
 
 
-async def _resolve_job_names(db: AsyncSession, job_ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
+async def _resolve_job_names(
+    db: AsyncSession, job_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, str]:
     result = await db.execute(select(Job.id, Job.name).where(Job.id.in_(job_ids)))
     return {row[0]: row[1] for row in result.all()}
 
 
-async def _raise_cycle_error(db: AsyncSession, job_id: uuid.UUID, path: list[str]) -> None:
+async def _raise_cycle_error(
+    db: AsyncSession, job_id: uuid.UUID, path: list[str]
+) -> None:
     full_path_ids = [job_id] + [uuid.UUID(p) for p in path]
     names = await _resolve_job_names(db, full_path_ids)
     raise APIError(
@@ -94,7 +106,9 @@ async def _create_dependencies(
         db.add(JobDependency(job_id=job_id, depends_on_job_id=dep_id))
 
 
-def _compute_schedule(payload: JobCreateRequest) -> tuple[JobStatus, datetime | None, datetime | None]:
+def _compute_schedule(
+    payload: JobCreateRequest,
+) -> tuple[JobStatus, datetime | None, datetime | None]:
     if payload.job_type == JobType.immediate:
         return JobStatus.queued, None, None
     if payload.job_type == JobType.delayed:
@@ -102,7 +116,9 @@ def _compute_schedule(payload: JobCreateRequest) -> tuple[JobStatus, datetime | 
     if payload.job_type == JobType.scheduled:
         return JobStatus.scheduled, payload.scheduled_at, None
     if payload.job_type == JobType.recurring:
-        next_run = croniter(payload.cron_expression, datetime.now(timezone.utc)).get_next(datetime)
+        next_run = croniter(
+            payload.cron_expression, datetime.now(timezone.utc)
+        ).get_next(datetime)
         return JobStatus.scheduled, next_run, None
     raise APIError(400, "INVALID_JOB_TYPE", f"Unsupported job_type: {payload.job_type}")
 
@@ -130,7 +146,9 @@ async def _create_single_job(
         status=status,
         priority=payload.priority,
         job_type=payload.job_type,
-        cron_expression=payload.cron_expression if payload.job_type == JobType.recurring else None,
+        cron_expression=(
+            payload.cron_expression if payload.job_type == JobType.recurring else None
+        ),
         scheduled_at=scheduled_at,
         run_at=run_at,
         max_runtime_seconds=payload.max_runtime_seconds,
@@ -199,7 +217,9 @@ async def _create_batch_job(
     for child in payload.batch_jobs or []:
         child_key = child.idempotency_key
         if child_key:
-            existing_child = await db.scalar(select(Job).where(Job.idempotency_key == child_key))
+            existing_child = await db.scalar(
+                select(Job).where(Job.idempotency_key == child_key)
+            )
             if existing_child is not None:
                 continue
         db.add(
@@ -237,7 +257,9 @@ async def create_job(
 
     idempotency_key = idempotency_key_header or payload.idempotency_key
     if idempotency_key:
-        existing = await db.scalar(select(Job).where(Job.idempotency_key == idempotency_key))
+        existing = await db.scalar(
+            select(Job).where(Job.idempotency_key == idempotency_key)
+        )
         if existing is not None:
             return existing, False
 
@@ -275,7 +297,11 @@ async def list_jobs(
     order_column = Job.priority.desc() if sort == "priority" else Job.created_at.desc()
 
     result = await db.execute(
-        select(Job).where(*conditions).order_by(order_column).offset((page - 1) * limit).limit(limit)
+        select(Job)
+        .where(*conditions)
+        .order_by(order_column)
+        .offset((page - 1) * limit)
+        .limit(limit)
     )
     return list(result.scalars().all()), total or 0
 
@@ -314,7 +340,9 @@ async def get_job_detail(
 async def cancel_job(db: AsyncSession, org_id: uuid.UUID, job_id: uuid.UUID) -> Job:
     job = await get_job_for_org(db, org_id, job_id)
     if job.status in ACTIVE_STATUSES:
-        raise APIError(409, "JOB_NOT_CANCELLABLE", "Cannot cancel a job that is currently running")
+        raise APIError(
+            409, "JOB_NOT_CANCELLABLE", "Cannot cancel a job that is currently running"
+        )
     if job.status not in CANCELLABLE_STATUSES:
         raise APIError(409, "JOB_NOT_CANCELLABLE", "Job is already in a terminal state")
     job.status = JobStatus.cancelled
@@ -326,7 +354,9 @@ async def cancel_job(db: AsyncSession, org_id: uuid.UUID, job_id: uuid.UUID) -> 
 async def retry_job(db: AsyncSession, org_id: uuid.UUID, job_id: uuid.UUID) -> Job:
     job = await get_job_for_org(db, org_id, job_id)
     if job.status not in RETRYABLE_STATUSES:
-        raise APIError(409, "JOB_NOT_RETRYABLE", "Only failed or dead jobs can be retried")
+        raise APIError(
+            409, "JOB_NOT_RETRYABLE", "Only failed or dead jobs can be retried"
+        )
 
     job.status = JobStatus.queued
     job.worker_id = None
@@ -338,7 +368,9 @@ async def retry_job(db: AsyncSession, org_id: uuid.UUID, job_id: uuid.UUID) -> J
     job.error_traceback = None
     job.scheduled_at = None
 
-    await db.execute(delete(DeadLetterQueueEntry).where(DeadLetterQueueEntry.job_id == job.id))
+    await db.execute(
+        delete(DeadLetterQueueEntry).where(DeadLetterQueueEntry.job_id == job.id)
+    )
 
     await db.commit()
     await db.refresh(job)
@@ -350,7 +382,9 @@ async def get_job_logs(
 ) -> tuple[list[JobLog], int]:
     job = await get_job_for_org(db, org_id, job_id)
 
-    total = await db.scalar(select(func.count()).select_from(JobLog).where(JobLog.job_id == job.id))
+    total = await db.scalar(
+        select(func.count()).select_from(JobLog).where(JobLog.job_id == job.id)
+    )
     result = await db.execute(
         select(JobLog)
         .where(JobLog.job_id == job.id)
@@ -361,7 +395,9 @@ async def get_job_logs(
     return list(result.scalars().all()), total or 0
 
 
-async def batch_cancel_jobs(db: AsyncSession, org_id: uuid.UUID, job_ids: list[uuid.UUID]) -> dict:
+async def batch_cancel_jobs(
+    db: AsyncSession, org_id: uuid.UUID, job_ids: list[uuid.UUID]
+) -> dict:
     existing_result = await db.execute(
         select(Job.id, Job.status)
         .join(Queue, Queue.id == Job.queue_id)
@@ -405,20 +441,29 @@ async def add_dependency(
 
     existing = await db.scalar(
         select(JobDependency).where(
-            JobDependency.job_id == job_id, JobDependency.depends_on_job_id == depends_on_job_id
+            JobDependency.job_id == job_id,
+            JobDependency.depends_on_job_id == depends_on_job_id,
         )
     )
     if existing is not None:
-        raise APIError(409, "DEPENDENCY_ALREADY_EXISTS", "This dependency already exists")
+        raise APIError(
+            409, "DEPENDENCY_ALREADY_EXISTS", "This dependency already exists"
+        )
 
-    has_cycle, path = await dependency_service.detect_cycle(job_id, [depends_on_job_id], db)
+    has_cycle, path = await dependency_service.detect_cycle(
+        job_id, [depends_on_job_id], db
+    )
     if has_cycle:
         await _raise_cycle_error(db, job_id, path)
 
     db.add(JobDependency(job_id=job_id, depends_on_job_id=depends_on_job_id))
 
     dep_job = await db.get(Job, depends_on_job_id)
-    if job.status == JobStatus.queued and dep_job is not None and dep_job.status != JobStatus.completed:
+    if (
+        job.status == JobStatus.queued
+        and dep_job is not None
+        and dep_job.status != JobStatus.completed
+    ):
         job.status = JobStatus.blocked
 
     await db.commit()
@@ -433,7 +478,8 @@ async def remove_dependency(
 
     result = await db.execute(
         delete(JobDependency).where(
-            JobDependency.job_id == job_id, JobDependency.depends_on_job_id == dep_job_id
+            JobDependency.job_id == job_id,
+            JobDependency.depends_on_job_id == dep_job_id,
         )
     )
     if result.rowcount == 0:
@@ -477,7 +523,9 @@ def _validate_workflow_acyclic(payload: WorkflowCreateRequest) -> None:
                 queue.append(neighbor)
 
     if visited_count != len(payload.jobs):
-        raise APIError(400, "WORKFLOW_CYCLE_DETECTED", "Workflow job dependencies contain a cycle")
+        raise APIError(
+            400, "WORKFLOW_CYCLE_DETECTED", "Workflow job dependencies contain a cycle"
+        )
 
 
 async def create_workflow(

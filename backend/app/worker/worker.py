@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 import psutil
 from redis.asyncio import Redis
 from sqlalchemy import text, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import AsyncSessionLocal
@@ -36,8 +35,7 @@ SHARD_REASSIGN_INTERVAL_SECONDS = 30
 # THE MOST IMPORTANT QUERY IN THE ENTIRE PROJECT. Do not "optimize" this into an
 # ORM SELECT-then-UPDATE — FOR UPDATE SKIP LOCKED is what makes claiming atomic
 # across concurrent workers. See CLAUDE.md.
-CLAIM_QUERY = text(
-    """
+CLAIM_QUERY = text("""
     UPDATE jobs
     SET status = 'claimed',
         worker_id = :worker_id,
@@ -53,15 +51,13 @@ CLAIM_QUERY = text(
         LIMIT 1
     )
     RETURNING *
-    """
-)
+    """)
 
 # Same claim query, plus a shard filter. hashtext() % N can be negative in
 # Postgres (sign follows the dividend), so it's normalized into [0, N) before
 # comparing to :shard_id - otherwise roughly half of all jobs would never
 # match any shard.
-SHARD_CLAIM_QUERY = text(
-    """
+SHARD_CLAIM_QUERY = text("""
     UPDATE jobs
     SET status = 'claimed',
         worker_id = :worker_id,
@@ -78,8 +74,7 @@ SHARD_CLAIM_QUERY = text(
         LIMIT 1
     )
     RETURNING *
-    """
-)
+    """)
 
 
 async def _run_handler(payload: dict, attempt_number: int) -> None:
@@ -181,9 +176,12 @@ class JobWorker:
             queue.name,
         )
 
-        logger.info("Worker %s started, watching queue %s", self.worker_id, self.queue_id)
+        logger.info(
+            "Worker %s started, watching queue %s", self.worker_id, self.queue_id
+        )
         await self._publish_event(
-            "worker.connected", {"worker_id": str(self.worker_id), "queue_id": str(self.queue_id)}
+            "worker.connected",
+            {"worker_id": str(self.worker_id), "queue_id": str(self.queue_id)},
         )
 
         poll_task = asyncio.create_task(self._poll_loop())
@@ -207,7 +205,9 @@ class JobWorker:
 
     async def _graceful_shutdown(self) -> None:
         if self.active_tasks:
-            logger.info("Waiting for %d active job(s) to finish", len(self.active_tasks))
+            logger.info(
+                "Waiting for %d active job(s) to finish", len(self.active_tasks)
+            )
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*self.active_tasks.values(), return_exceptions=True),
@@ -215,17 +215,21 @@ class JobWorker:
                 )
             except asyncio.TimeoutError:
                 logger.warning(
-                    "Timed out after 30s waiting for %d active job(s)", len(self.active_tasks)
+                    "Timed out after 30s waiting for %d active job(s)",
+                    len(self.active_tasks),
                 )
 
         async with AsyncSessionLocal() as db:
             await db.execute(
-                update(Worker).where(Worker.id == self.worker_id).values(status=WorkerStatus.offline)
+                update(Worker)
+                .where(Worker.id == self.worker_id)
+                .values(status=WorkerStatus.offline)
             )
             await db.commit()
 
         await self._publish_event(
-            "worker.disconnected", {"worker_id": str(self.worker_id), "queue_id": str(self.queue_id)}
+            "worker.disconnected",
+            {"worker_id": str(self.worker_id), "queue_id": str(self.queue_id)},
         )
         if self.redis is not None:
             await self.redis.aclose()
@@ -258,7 +262,9 @@ class JobWorker:
             if queue is None or not queue.is_active or queue.is_paused:
                 return
 
-            if len(self.active_tasks) >= min(queue.concurrency_limit, settings.WORKER_CONCURRENCY):
+            if len(self.active_tasks) >= min(
+                queue.concurrency_limit, settings.WORKER_CONCURRENCY
+            ):
                 return
 
             if self.shard_count > 1:
@@ -273,7 +279,8 @@ class JobWorker:
                 )
             else:
                 result = await db.execute(
-                    CLAIM_QUERY, {"worker_id": self.worker_id, "queue_id": self.queue_id}
+                    CLAIM_QUERY,
+                    {"worker_id": self.worker_id, "queue_id": self.queue_id},
                 )
             row = result.mappings().first()
             await db.commit()
@@ -304,7 +311,9 @@ class JobWorker:
                     )
                     await db.commit()
                 logger.info(
-                    "Rate limited on queue %s — %.2f tokens remaining", queue.name, tokens_remaining
+                    "Rate limited on queue %s — %.2f tokens remaining",
+                    queue.name,
+                    tokens_remaining,
                 )
                 await self._publish_event(
                     "queue.rate_limited",
@@ -331,7 +340,9 @@ class JobWorker:
 
         task = asyncio.create_task(self._execute_job(job_row))
         self.active_tasks[job_id] = task
-        task.add_done_callback(lambda _t, jid=job_id: asyncio.create_task(self._on_job_task_done(jid)))
+        task.add_done_callback(
+            lambda _t, jid=job_id: asyncio.create_task(self._on_job_task_done(jid))
+        )
 
     async def _on_job_task_done(self, job_id: uuid.UUID) -> None:
         self.active_tasks.pop(job_id, None)
@@ -341,7 +352,9 @@ class JobWorker:
                 .where(Worker.id == self.worker_id)
                 .values(
                     current_jobs=len(self.active_tasks),
-                    status=WorkerStatus.busy if self.active_tasks else WorkerStatus.idle,
+                    status=(
+                        WorkerStatus.busy if self.active_tasks else WorkerStatus.idle
+                    ),
                 )
             )
             await db.commit()
@@ -399,7 +412,9 @@ class JobWorker:
         if error is None:
             await self._finish_success(job_id, execution_id, completed_at, duration_ms)
             async with AsyncSessionLocal() as db:
-                await dependency_service.check_and_unblock(job_id, db, self.redis, self.org_id)
+                await dependency_service.check_and_unblock(
+                    job_id, db, self.redis, self.org_id
+                )
             await self._publish_event(
                 "job.completed",
                 {
@@ -412,7 +427,13 @@ class JobWorker:
             )
         else:
             await self._finish_failure(
-                job_row, execution_id, completed_at, duration_ms, attempt_number, error, tb
+                job_row,
+                execution_id,
+                completed_at,
+                duration_ms,
+                attempt_number,
+                error,
+                tb,
             )
 
         await self._publish_queue_stats(job_row["queue_id"])
@@ -428,12 +449,20 @@ class JobWorker:
             await db.execute(
                 update(Job)
                 .where(Job.id == job_id)
-                .values(status=JobStatus.completed, completed_at=completed_at, result={"success": True})
+                .values(
+                    status=JobStatus.completed,
+                    completed_at=completed_at,
+                    result={"success": True},
+                )
             )
             await db.execute(
                 update(JobExecution)
                 .where(JobExecution.id == execution_id)
-                .values(status=JobStatus.completed, completed_at=completed_at, duration_ms=duration_ms)
+                .values(
+                    status=JobStatus.completed,
+                    completed_at=completed_at,
+                    duration_ms=duration_ms,
+                )
             )
             db.add(
                 JobLog(
@@ -480,6 +509,20 @@ class JobWorker:
                     error_traceback=tb,
                 )
             )
+            # Land on the `failed` status (and stamp failed_at) before deciding
+            # retry-vs-dead below, so the queued<->dead transition always passes
+            # through `failed` per the CLAUDE.md lifecycle contract.
+            await db.execute(
+                update(Job)
+                .where(Job.id == job_id)
+                .values(
+                    status=JobStatus.failed,
+                    failed_at=completed_at,
+                    error_message=str(error),
+                    error_traceback=tb,
+                )
+            )
+            await db.commit()
 
             will_retry = attempt_number < job_row["max_attempts"]
             next_run: datetime | None = None
@@ -509,7 +552,6 @@ class JobWorker:
                     .where(Job.id == job_id)
                     .values(
                         status=JobStatus.dead,
-                        failed_at=completed_at,
                         error_message=str(error),
                         error_traceback=tb,
                     )
@@ -531,7 +573,9 @@ class JobWorker:
         if not will_retry:
             # Fire-and-forget: AI analysis must never block job processing or
             # delay the job.failed/job.dead events below.
-            asyncio.create_task(ai_service.run_dlq_analysis(dlq_id, job_id, self.redis, self.org_id))
+            asyncio.create_task(
+                ai_service.run_dlq_analysis(dlq_id, job_id, self.redis, self.org_id)
+            )
 
         await self._publish_event(
             "job.failed",
@@ -561,8 +605,8 @@ class JobWorker:
 
     async def _publish_queue_stats(self, queue_id: uuid.UUID) -> None:
         async with AsyncSessionLocal() as db:
-            pending, running, failed, _throughput = await queue_service.get_stats_for_queue(
-                db, queue_id
+            pending, running, failed, _throughput = (
+                await queue_service.get_stats_for_queue(db, queue_id)
             )
         await self._publish_event(
             "queue.stats",
@@ -583,7 +627,9 @@ class JobWorker:
             try:
                 await self._send_heartbeat()
             except Exception:
-                logger.exception("Error while sending heartbeat for worker %s", self.worker_id)
+                logger.exception(
+                    "Error while sending heartbeat for worker %s", self.worker_id
+                )
             try:
                 await asyncio.wait_for(
                     self._stopping.wait(), timeout=settings.HEARTBEAT_INTERVAL_SECONDS
@@ -646,7 +692,9 @@ class JobWorker:
                 .values(
                     last_seen=now,
                     current_jobs=len(self.active_tasks),
-                    status=WorkerStatus.busy if self.active_tasks else WorkerStatus.idle,
+                    status=(
+                        WorkerStatus.busy if self.active_tasks else WorkerStatus.idle
+                    ),
                 )
             )
             await db.commit()
@@ -678,6 +726,8 @@ class JobWorker:
 
 
 async def run(queue_id: uuid.UUID) -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     worker = JobWorker(queue_id)
     await worker.start()

@@ -30,7 +30,9 @@ async def publish_event(
         "data": data,
         "ts": datetime.now(timezone.utc).isoformat(),
     }
-    await redis_client.publish(events_channel(org_id), json.dumps(envelope, default=_json_default))
+    await redis_client.publish(
+        events_channel(org_id), json.dumps(envelope, default=_json_default)
+    )
 
 
 async def publish_metric(
@@ -41,4 +43,6 @@ async def publish_metric(
         "value": value,
         "ts": datetime.now(timezone.utc).isoformat(),
     }
-    await redis_client.publish(metrics_channel(org_id), json.dumps(payload, default=_json_default))
+    await redis_client.publish(
+        metrics_channel(org_id), json.dumps(payload, default=_json_default)
+    )

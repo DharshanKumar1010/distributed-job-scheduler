@@ -46,7 +46,11 @@ class Permission:
 
     @classmethod
     def all(cls) -> set[str]:
-        return {v for k, v in vars(cls).items() if not k.startswith("_") and isinstance(v, str)}
+        return {
+            v
+            for k, v in vars(cls).items()
+            if not k.startswith("_") and isinstance(v, str)
+        }
 
 
 ALL_PERMISSIONS: set[str] = Permission.all()
@@ -99,4 +103,6 @@ def get_permissions_for_role(role: str) -> list[str]:
 
 
 def roles_with_permission(permission: str) -> list[str]:
-    return sorted(role for role, perms in ROLE_PERMISSIONS.items() if permission in perms)
+    return sorted(
+        role for role, perms in ROLE_PERMISSIONS.items() if permission in perms
+    )

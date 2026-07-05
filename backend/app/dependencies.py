@@ -20,7 +20,9 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
     to_encode["exp"] = expire
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
@@ -66,9 +68,11 @@ def _insufficient_permissions_error(role: UserRole, missing: list[str]) -> APIEr
     return APIError(
         403,
         "INSUFFICIENT_PERMISSIONS",
-        f"Your role '{role.value}' does not have permission '{missing[0]}'"
-        if len(missing) == 1
-        else f"Your role '{role.value}' is missing permissions: {', '.join(missing)}",
+        (
+            f"Your role '{role.value}' does not have permission '{missing[0]}'"
+            if len(missing) == 1
+            else f"Your role '{role.value}' is missing permissions: {', '.join(missing)}"
+        ),
         details={
             "required_permission": missing[0] if len(missing) == 1 else missing,
             "your_role": role.value,

@@ -30,7 +30,9 @@ class RedisLock:
 
     async def acquire(self, redis: Redis | None = None) -> bool:
         client = redis or self.redis
-        result = await client.set(f"lock:{self.key}", self.owner_id, nx=True, ex=self.ttl_seconds)
+        result = await client.set(
+            f"lock:{self.key}", self.owner_id, nx=True, ex=self.ttl_seconds
+        )
         return result is not None
 
     async def release(self, redis: Redis | None = None) -> bool:
@@ -48,7 +50,9 @@ class RedisLock:
 
 
 async def acquire_advisory_lock(db, lock_id: int) -> bool:
-    result = await db.execute(text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": lock_id})
+    result = await db.execute(
+        text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": lock_id}
+    )
     return bool(result.scalar())
 
 

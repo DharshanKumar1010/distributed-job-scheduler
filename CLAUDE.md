@@ -146,8 +146,12 @@ All WebSocket messages are JSON with this envelope:
 }
 ```
 
-Event names: `job.created`, `job.updated`, `job.completed`, `job.failed`,
-`job.dead`, `worker.connected`, `worker.disconnected`, `queue.stats`.
+Event names (13, superseding the original 8-name draft below — `job.claimed`/
+`job.running` replaced the more generic `job.updated`, and sharding/rate-limiting/AI
+bonus phases added their own events): `job.claimed`, `job.running`, `job.completed`,
+`job.failed`, `job.dead`, `job.unblocked`, `worker.connected`, `worker.disconnected`,
+`worker.heartbeat`, `queue.stats`, `queue.rate_limited`, `queue.rebalancing`,
+`dlq.ai_summary_ready`.
 
 ---
 

@@ -16,7 +16,9 @@ class UserRole(str, enum.Enum):
 
 
 user_role_enum = Enum(
-    UserRole, name="user_role", values_callable=lambda enum_cls: [e.value for e in enum_cls]
+    UserRole,
+    name="user_role",
+    values_callable=lambda enum_cls: [e.value for e in enum_cls],
 )
 
 
@@ -25,7 +27,9 @@ class User(Base, TimestampMixin):
     __table_args__ = (Index("ix_users_org_id_email", "org_id", "email"),)
 
     org_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
     )
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)

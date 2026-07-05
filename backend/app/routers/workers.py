@@ -20,7 +20,9 @@ async def list_workers(
     current_user: User = Depends(require_permission(Permission.WORKER_READ)),
     db: AsyncSession = Depends(get_db),
 ):
-    workers, total = await worker_service.list_workers(db, current_user.org_id, page, limit)
+    workers, total = await worker_service.list_workers(
+        db, current_user.org_id, page, limit
+    )
     return PaginatedResponse(
         data=[WorkerOut.model_validate(w) for w in workers],
         meta=PaginationMeta(total=total, page=page, limit=limit),
@@ -33,7 +35,9 @@ async def get_worker(
     current_user: User = Depends(require_permission(Permission.WORKER_READ)),
     db: AsyncSession = Depends(get_db),
 ):
-    worker, heartbeats = await worker_service.get_worker_detail(db, current_user.org_id, worker_id)
+    worker, heartbeats = await worker_service.get_worker_detail(
+        db, current_user.org_id, worker_id
+    )
     detail = WorkerDetailOut(
         **WorkerOut.model_validate(worker).model_dump(),
         heartbeats=[WorkerHeartbeatOut.model_validate(h) for h in heartbeats],

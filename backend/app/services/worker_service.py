@@ -31,7 +31,9 @@ async def list_workers(
     return list(result.scalars().all()), total or 0
 
 
-async def get_worker_for_org(db: AsyncSession, org_id: uuid.UUID, worker_id: uuid.UUID) -> Worker:
+async def get_worker_for_org(
+    db: AsyncSession, org_id: uuid.UUID, worker_id: uuid.UUID
+) -> Worker:
     worker = await db.scalar(
         select(Worker)
         .join(Queue, Queue.id == Worker.queue_id)
@@ -62,7 +64,9 @@ async def get_worker_detail(
     return worker, heartbeats
 
 
-async def force_offline(db: AsyncSession, org_id: uuid.UUID, worker_id: uuid.UUID) -> Worker:
+async def force_offline(
+    db: AsyncSession, org_id: uuid.UUID, worker_id: uuid.UUID
+) -> Worker:
     worker = await get_worker_for_org(db, org_id, worker_id)
     worker.status = WorkerStatus.offline
     await db.commit()

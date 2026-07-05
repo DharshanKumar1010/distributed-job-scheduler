@@ -230,11 +230,12 @@ round trip needed since the whole graph is self-contained in the request).
 ## WebSocket
 
 `GET /ws/connect?token=<jwt>` — one connection per browser tab, org-scoped
-fan-out. 17 event types are published, each wrapped in the envelope
-`{ "event": "...", "data": {...}, "ts": "..." }`:
+fan-out. 15 event types are sent over the wire, each wrapped in the envelope
+`{ "event": "...", "data": {...}, "ts": "..." }`: two connection-lifecycle
+messages sent directly on connect (`connection.established`, `snapshot`), plus
+13 domain events fanned out through Redis pub/sub:
 
-`connection.established`, `snapshot`, `job.created`, `job.claimed`,
-`job.running`, `job.updated`, `job.completed`, `job.failed`, `job.dead`,
+`job.claimed`, `job.running`, `job.completed`, `job.failed`, `job.dead`,
 `job.unblocked`, `worker.connected`, `worker.disconnected`,
 `worker.heartbeat`, `queue.stats`, `queue.rate_limited`,
 `queue.rebalancing`, `dlq.ai_summary_ready`.

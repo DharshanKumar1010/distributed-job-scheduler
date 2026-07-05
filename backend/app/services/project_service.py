@@ -26,7 +26,10 @@ async def list_projects(
 
 
 async def _check_slug_available(
-    db: AsyncSession, org_id: uuid.UUID, slug: str, exclude_project_id: uuid.UUID | None = None
+    db: AsyncSession,
+    org_id: uuid.UUID,
+    slug: str,
+    exclude_project_id: uuid.UUID | None = None,
 ) -> None:
     stmt = select(Project).where(Project.org_id == org_id, Project.slug == slug)
     if exclude_project_id is not None:
@@ -34,7 +37,9 @@ async def _check_slug_available(
     existing = await db.scalar(stmt)
     if existing is not None:
         raise APIError(
-            409, "PROJECT_SLUG_TAKEN", "A project with this slug already exists in this organization"
+            409,
+            "PROJECT_SLUG_TAKEN",
+            "A project with this slug already exists in this organization",
         )
 
 
@@ -49,10 +54,14 @@ async def create_project(
     return project
 
 
-async def get_project(db: AsyncSession, org_id: uuid.UUID, project_id: uuid.UUID) -> Project:
+async def get_project(
+    db: AsyncSession, org_id: uuid.UUID, project_id: uuid.UUID
+) -> Project:
     project = await db.scalar(
         select(Project).where(
-            Project.id == project_id, Project.org_id == org_id, Project.is_active.is_(True)
+            Project.id == project_id,
+            Project.org_id == org_id,
+            Project.is_active.is_(True),
         )
     )
     if project is None:
@@ -65,7 +74,9 @@ async def update_project(
 ) -> Project:
     project = await get_project(db, org_id, project_id)
     if "slug" in data and data["slug"] != project.slug:
-        await _check_slug_available(db, org_id, data["slug"], exclude_project_id=project.id)
+        await _check_slug_available(
+            db, org_id, data["slug"], exclude_project_id=project.id
+        )
     for field, value in data.items():
         setattr(project, field, value)
     await db.commit()
@@ -73,7 +84,9 @@ async def update_project(
     return project
 
 
-async def soft_delete_project(db: AsyncSession, org_id: uuid.UUID, project_id: uuid.UUID) -> Project:
+async def soft_delete_project(
+    db: AsyncSession, org_id: uuid.UUID, project_id: uuid.UUID
+) -> Project:
     project = await get_project(db, org_id, project_id)
     project.is_active = False
     await db.commit()

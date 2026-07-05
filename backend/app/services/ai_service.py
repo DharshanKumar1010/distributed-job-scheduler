@@ -47,7 +47,12 @@ def extract_error_type(error_message: str | None) -> str:
         return "Network/Infrastructure"
     if "permission denied" in text or "unauthorized" in text or "403" in text:
         return "Authorization"
-    if "not found" in text or "404" in text or "keyerror" in text or "attributeerror" in text:
+    if (
+        "not found" in text
+        or "404" in text
+        or "keyerror" in text
+        or "attributeerror" in text
+    ):
         return "Data/Logic"
     if "rate limit" in text or "429" in text or "too many requests" in text:
         return "Rate Limiting"
@@ -65,7 +70,9 @@ def format_execution_history(executions: list[JobExecution]) -> str:
         return "No execution history available"
     lines = []
     for execution in executions:
-        started = execution.started_at.isoformat() if execution.started_at else "unknown"
+        started = (
+            execution.started_at.isoformat() if execution.started_at else "unknown"
+        )
         duration = execution.duration_ms if execution.duration_ms is not None else "?"
         error = (execution.error_message or "")[:100]
         lines.append(
@@ -211,13 +218,17 @@ async def run_dlq_analysis(
         )
 
         try:
-            summary = await generate_failure_summary(job, dlq_entry, executions, logs, queue_name)
+            summary = await generate_failure_summary(
+                job, dlq_entry, executions, logs, queue_name
+            )
         except Exception as exc:  # noqa: BLE001 - AI failures must never propagate
             logger.warning("AI summary generation failed: %s", exc)
             summary = f"[Analysis unavailable: {type(exc).__name__}]"
 
         await db.execute(
-            update(DeadLetterQueueEntry).where(DeadLetterQueueEntry.id == dlq_id).values(ai_summary=summary)
+            update(DeadLetterQueueEntry)
+            .where(DeadLetterQueueEntry.id == dlq_id)
+            .values(ai_summary=summary)
         )
         await db.commit()
         job_name = job.name
@@ -268,7 +279,9 @@ async def analyze_failure_pattern(
     total_failures = len(entries)
     error_types = [extract_error_type(e.last_error) for e in entries]
     distribution = dict(Counter(error_types))
-    most_common_error = max(distribution, key=distribution.get) if distribution else "None"
+    most_common_error = (
+        max(distribution, key=distribution.get) if distribution else "None"
+    )
 
     hour_counts = Counter(e.failed_at.astimezone(timezone.utc).hour for e in entries)
     peak_failure_hour = max(hour_counts, key=hour_counts.get) if hour_counts else None
@@ -297,6 +310,8 @@ async def analyze_failure_pattern(
     }
 
     if redis is not None:
-        await redis.set(cache_key, json.dumps(payload), ex=FAILURE_PATTERN_CACHE_SECONDS)
+        await redis.set(
+            cache_key, json.dumps(payload), ex=FAILURE_PATTERN_CACHE_SECONDS
+        )
 
     return payload

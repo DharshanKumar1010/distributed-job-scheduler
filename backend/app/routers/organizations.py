@@ -4,11 +4,16 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.permissions import Permission
-from app.dependencies import ensure_same_org, get_current_user, get_db, require_permission
+from app.dependencies import ensure_same_org, get_db, require_permission
 from app.models.user import User
 from app.schemas.common import DataResponse, PaginatedResponse, PaginationMeta
 from app.schemas.organization import OrganizationOut, OrganizationUpdate
-from app.schemas.user import UserInviteRequest, UserInviteResponse, UserOut, UserRoleUpdateRequest
+from app.schemas.user import (
+    UserInviteRequest,
+    UserInviteResponse,
+    UserOut,
+    UserRoleUpdateRequest,
+)
 from app.services import organization_service
 
 router = APIRouter(prefix="/orgs", tags=["organizations"])
@@ -71,7 +76,9 @@ async def invite_user(
         db, org_id, payload.email, payload.full_name, payload.role
     )
     return DataResponse(
-        data=UserInviteResponse(user=UserOut.model_validate(user), temporary_password=temp_password)
+        data=UserInviteResponse(
+            user=UserOut.model_validate(user), temporary_password=temp_password
+        )
     )
 
 
@@ -84,7 +91,9 @@ async def update_user_role(
     db: AsyncSession = Depends(get_db),
 ):
     ensure_same_org(current_user, org_id)
-    user = await organization_service.update_user_role(db, org_id, user_id, payload.role)
+    user = await organization_service.update_user_role(
+        db, org_id, user_id, payload.role
+    )
     return DataResponse(data=UserOut.model_validate(user))
 
 

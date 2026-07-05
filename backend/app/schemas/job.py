@@ -45,7 +45,9 @@ class JobCreateRequest(BaseModel):
         if self.job_type == JobType.recurring and not self.cron_expression:
             raise ValueError("cron_expression is required when job_type is 'recurring'")
         if self.job_type == JobType.batch and not self.batch_jobs:
-            raise ValueError("batch_jobs is required and must be non-empty when job_type is 'batch'")
+            raise ValueError(
+                "batch_jobs is required and must be non-empty when job_type is 'batch'"
+            )
         return self
 
 

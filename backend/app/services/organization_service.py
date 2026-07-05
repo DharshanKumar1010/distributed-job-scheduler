@@ -17,7 +17,9 @@ async def get_organization(db: AsyncSession, org_id: uuid.UUID) -> Organization:
     return org
 
 
-async def update_organization(db: AsyncSession, org_id: uuid.UUID, data: dict) -> Organization:
+async def update_organization(
+    db: AsyncSession, org_id: uuid.UUID, data: dict
+) -> Organization:
     org = await get_organization(db, org_id)
     for field, value in data.items():
         setattr(org, field, value)
@@ -43,7 +45,11 @@ async def list_org_users(
 
 
 async def invite_user(
-    db: AsyncSession, org_id: uuid.UUID, email: str, full_name: str | None, role: UserRole
+    db: AsyncSession,
+    org_id: uuid.UUID,
+    email: str,
+    full_name: str | None,
+    role: UserRole,
 ) -> tuple[User, str]:
     existing = await db.scalar(select(User).where(User.email == email))
     if existing is not None:
@@ -66,7 +72,9 @@ async def invite_user(
 async def update_user_role(
     db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID, role: UserRole
 ) -> User:
-    user = await db.scalar(select(User).where(User.id == user_id, User.org_id == org_id))
+    user = await db.scalar(
+        select(User).where(User.id == user_id, User.org_id == org_id)
+    )
     if user is None:
         raise APIError(404, "USER_NOT_FOUND", "User not found")
     user.role = role
@@ -76,11 +84,16 @@ async def update_user_role(
 
 
 async def remove_user(
-    db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID, requesting_user_id: uuid.UUID
+    db: AsyncSession,
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    requesting_user_id: uuid.UUID,
 ) -> User:
     if user_id == requesting_user_id:
         raise APIError(400, "CANNOT_REMOVE_SELF", "You cannot remove your own account")
-    user = await db.scalar(select(User).where(User.id == user_id, User.org_id == org_id))
+    user = await db.scalar(
+        select(User).where(User.id == user_id, User.org_id == org_id)
+    )
     if user is None:
         raise APIError(404, "USER_NOT_FOUND", "User not found")
     user.is_active = False
