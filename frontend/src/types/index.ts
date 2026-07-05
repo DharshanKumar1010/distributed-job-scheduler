@@ -196,6 +196,72 @@ export interface JobCreateRequest {
   depends_on?: string[]
 }
 
+// ---- Workflow dependencies (DAG) ----
+
+export interface DependencyNode {
+  job_id: string
+  name: string
+  status: JobStatus
+  depends_on: DependencyNode[]
+  dependents: DependencyNode[]
+}
+
+export interface WorkflowStatus {
+  total: number
+  completed: number
+  running: number
+  blocked: number
+  failed: number
+  dead: number
+  queued: number
+  progress_pct: number
+}
+
+export interface DependencyGraph extends DependencyNode {
+  workflow_status: WorkflowStatus
+}
+
+export interface DependentJob {
+  job_id: string
+  name: string
+  status: JobStatus
+  queue_id: string
+  blocked_on_others: boolean
+}
+
+export interface WorkflowJobSpec {
+  ref: string
+  name: string
+  queue_id: string
+  payload?: Record<string, unknown>
+  depends_on?: string[]
+  priority?: number
+  max_attempts?: number
+  retry_strategy?: RetryStrategy
+  base_delay_seconds?: number
+  max_delay_seconds?: number
+  max_runtime_seconds?: number
+  tags?: string[]
+}
+
+export interface WorkflowCreateRequest {
+  name: string
+  jobs: WorkflowJobSpec[]
+}
+
+export interface WorkflowJobResult {
+  ref: string
+  id: string
+  name: string
+  status: JobStatus
+}
+
+export interface WorkflowCreateResult {
+  name: string
+  jobs: WorkflowJobResult[]
+  dependency_map: Record<string, string[]>
+}
+
 // ---- Worker ----
 
 export interface Worker {
@@ -255,6 +321,7 @@ export type WsEventName =
   | 'job.completed'
   | 'job.failed'
   | 'job.dead'
+  | 'job.unblocked'
   | 'worker.connected'
   | 'worker.disconnected'
   | 'worker.heartbeat'
@@ -286,6 +353,8 @@ export interface WsJobEventData {
   will_retry?: boolean
   total_attempts?: number
   last_error?: string
+  unblocked_by?: string
+  unblocked_by_name?: string | null
 }
 
 export interface WsWorkerHeartbeatData {

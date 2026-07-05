@@ -16,7 +16,8 @@ from app.models.project import Project
 from app.models.queue import Queue
 from app.models.scheduled_job import ScheduledJob
 from app.schemas.job import JobCreateRequest
-from app.services import queue_service
+from app.schemas.workflow import WorkflowCreateRequest, WorkflowCreateResult, WorkflowJobResult
+from app.services import dependency_service, queue_service
 
 CANCELLABLE_STATUSES = {JobStatus.queued, JobStatus.scheduled, JobStatus.blocked}
 ACTIVE_STATUSES = {JobStatus.claimed, JobStatus.running}
@@ -64,48 +65,31 @@ async def _dependencies_completed(db: AsyncSession, depends_on: list[uuid.UUID])
     return (incomplete or 0) == 0
 
 
-async def _load_dependency_edges_for_org(
-    db: AsyncSession, org_id: uuid.UUID
-) -> dict[uuid.UUID, set[uuid.UUID]]:
-    result = await db.execute(
-        select(JobDependency.job_id, JobDependency.depends_on_job_id)
-        .join(Job, Job.id == JobDependency.job_id)
-        .join(Queue, Queue.id == Job.queue_id)
-        .join(Project, Project.id == Queue.project_id)
-        .where(Project.org_id == org_id)
+async def _resolve_job_names(db: AsyncSession, job_ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
+    result = await db.execute(select(Job.id, Job.name).where(Job.id.in_(job_ids)))
+    return {row[0]: row[1] for row in result.all()}
+
+
+async def _raise_cycle_error(db: AsyncSession, job_id: uuid.UUID, path: list[str]) -> None:
+    full_path_ids = [job_id] + [uuid.UUID(p) for p in path]
+    names = await _resolve_job_names(db, full_path_ids)
+    raise APIError(
+        400,
+        "DEPENDENCY_CYCLE_DETECTED",
+        "Creating this dependency would form a cycle",
+        details={
+            "cycle_path": [str(jid) for jid in full_path_ids],
+            "cycle_path_names": [names.get(jid, str(jid)) for jid in full_path_ids],
+        },
     )
-    adjacency: dict[uuid.UUID, set[uuid.UUID]] = {}
-    for job_id, depends_on_job_id in result.all():
-        adjacency.setdefault(job_id, set()).add(depends_on_job_id)
-    return adjacency
-
-
-def _has_cycle(adjacency: dict[uuid.UUID, set[uuid.UUID]], start: uuid.UUID) -> bool:
-    visited: set[uuid.UUID] = set()
-    stack: set[uuid.UUID] = set()
-
-    def dfs(node: uuid.UUID) -> bool:
-        visited.add(node)
-        stack.add(node)
-        for neighbor in adjacency.get(node, ()):
-            if neighbor not in visited:
-                if dfs(neighbor):
-                    return True
-            elif neighbor in stack:
-                return True
-        stack.discard(node)
-        return False
-
-    return dfs(start)
 
 
 async def _create_dependencies(
     db: AsyncSession, org_id: uuid.UUID, job_id: uuid.UUID, depends_on: list[uuid.UUID]
 ) -> None:
-    adjacency = await _load_dependency_edges_for_org(db, org_id)
-    adjacency[job_id] = set(depends_on)
-    if _has_cycle(adjacency, job_id):
-        raise APIError(400, "DEPENDENCY_CYCLE", "Dependency graph contains a cycle")
+    has_cycle, path = await dependency_service.detect_cycle(job_id, depends_on, db)
+    if has_cycle:
+        await _raise_cycle_error(db, job_id, path)
     for dep_id in depends_on:
         db.add(JobDependency(job_id=job_id, depends_on_job_id=dep_id))
 
@@ -401,3 +385,150 @@ async def batch_cancel_jobs(db: AsyncSession, org_id: uuid.UUID, job_ids: list[u
         await db.commit()
 
     return {"cancelled": cancelled_ids, "skipped": skipped, "not_found": not_found}
+
+
+MODIFIABLE_DEPENDENCY_STATUSES = {JobStatus.blocked, JobStatus.queued}
+
+
+async def add_dependency(
+    db: AsyncSession, org_id: uuid.UUID, job_id: uuid.UUID, depends_on_job_id: uuid.UUID
+) -> Job:
+    job = await get_job_for_org(db, org_id, job_id)
+    if job.status not in MODIFIABLE_DEPENDENCY_STATUSES:
+        raise APIError(
+            409,
+            "JOB_NOT_MODIFIABLE",
+            "Dependencies can only be added to jobs in 'blocked' or 'queued' status",
+        )
+
+    await _verify_dependencies_exist(db, org_id, [depends_on_job_id])
+
+    existing = await db.scalar(
+        select(JobDependency).where(
+            JobDependency.job_id == job_id, JobDependency.depends_on_job_id == depends_on_job_id
+        )
+    )
+    if existing is not None:
+        raise APIError(409, "DEPENDENCY_ALREADY_EXISTS", "This dependency already exists")
+
+    has_cycle, path = await dependency_service.detect_cycle(job_id, [depends_on_job_id], db)
+    if has_cycle:
+        await _raise_cycle_error(db, job_id, path)
+
+    db.add(JobDependency(job_id=job_id, depends_on_job_id=depends_on_job_id))
+
+    dep_job = await db.get(Job, depends_on_job_id)
+    if job.status == JobStatus.queued and dep_job is not None and dep_job.status != JobStatus.completed:
+        job.status = JobStatus.blocked
+
+    await db.commit()
+    await db.refresh(job)
+    return job
+
+
+async def remove_dependency(
+    db: AsyncSession, org_id: uuid.UUID, job_id: uuid.UUID, dep_job_id: uuid.UUID
+) -> Job:
+    job = await get_job_for_org(db, org_id, job_id)
+
+    result = await db.execute(
+        delete(JobDependency).where(
+            JobDependency.job_id == job_id, JobDependency.depends_on_job_id == dep_job_id
+        )
+    )
+    if result.rowcount == 0:
+        raise APIError(404, "DEPENDENCY_NOT_FOUND", "This dependency does not exist")
+
+    if job.status == JobStatus.blocked:
+        remaining = await db.scalar(
+            select(func.count())
+            .select_from(JobDependency)
+            .join(Job, Job.id == JobDependency.depends_on_job_id)
+            .where(JobDependency.job_id == job_id, Job.status != JobStatus.completed)
+        )
+        if (remaining or 0) == 0:
+            job.status = JobStatus.queued
+
+    await db.commit()
+    await db.refresh(job)
+    return job
+
+
+def _validate_workflow_acyclic(payload: WorkflowCreateRequest) -> None:
+    """Pure in-memory topological sort (Kahn's algorithm) over the local ref
+    graph — the whole workflow is self-contained in the payload, so this
+    needs no DB round-trips.
+    """
+    in_degree = {job.ref: 0 for job in payload.jobs}
+    adjacency: dict[str, list[str]] = {job.ref: [] for job in payload.jobs}
+    for job in payload.jobs:
+        for dep_ref in job.depends_on:
+            adjacency[dep_ref].append(job.ref)
+            in_degree[job.ref] += 1
+
+    queue = [ref for ref, degree in in_degree.items() if degree == 0]
+    visited_count = 0
+    while queue:
+        current = queue.pop()
+        visited_count += 1
+        for neighbor in adjacency[current]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if visited_count != len(payload.jobs):
+        raise APIError(400, "WORKFLOW_CYCLE_DETECTED", "Workflow job dependencies contain a cycle")
+
+
+async def create_workflow(
+    db: AsyncSession, org_id: uuid.UUID, payload: WorkflowCreateRequest
+) -> WorkflowCreateResult:
+    _validate_workflow_acyclic(payload)
+
+    queue_ids = {job.queue_id for job in payload.jobs}
+    for queue_id in queue_ids:
+        await queue_service.get_queue_for_org(db, org_id, queue_id)
+
+    ref_to_job: dict[str, Job] = {}
+    for job_spec in payload.jobs:
+        job = Job(
+            queue_id=job_spec.queue_id,
+            name=job_spec.name,
+            payload=job_spec.payload,
+            status=JobStatus.blocked if job_spec.depends_on else JobStatus.queued,
+            job_type=JobType.immediate,
+            priority=job_spec.priority,
+            max_runtime_seconds=job_spec.max_runtime_seconds,
+            max_attempts=job_spec.max_attempts,
+            retry_strategy=job_spec.retry_strategy.value,
+            base_delay_seconds=job_spec.base_delay_seconds,
+            max_delay_seconds=job_spec.max_delay_seconds,
+            tags=job_spec.tags,
+        )
+        db.add(job)
+        await db.flush()
+        ref_to_job[job_spec.ref] = job
+
+    dependency_map: dict[str, list[str]] = {}
+    for job_spec in payload.jobs:
+        dependency_map[job_spec.ref] = job_spec.depends_on
+        for dep_ref in job_spec.depends_on:
+            db.add(
+                JobDependency(
+                    job_id=ref_to_job[job_spec.ref].id,
+                    depends_on_job_id=ref_to_job[dep_ref].id,
+                )
+            )
+
+    await db.commit()
+    for job in ref_to_job.values():
+        await db.refresh(job)
+
+    return WorkflowCreateResult(
+        name=payload.name,
+        jobs=[
+            WorkflowJobResult(ref=ref, id=job.id, name=job.name, status=job.status)
+            for ref, job in ref_to_job.items()
+        ],
+        dependency_map=dependency_map,
+    )

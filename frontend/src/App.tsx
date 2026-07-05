@@ -9,6 +9,7 @@ import { QueueDetailPage } from './pages/QueueDetailPage'
 import { QueuesPage } from './pages/QueuesPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { WorkersPage } from './pages/WorkersPage'
+import { WorkflowPage } from './pages/WorkflowPage'
 import { useAuthStore } from './store/authStore'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -36,6 +37,7 @@ function App() {
           <Route path="/queues/:queueId" element={<QueueDetailPage />} />
           <Route path="/jobs/:jobId" element={<JobDetailPage />} />
           <Route path="/workers" element={<WorkersPage />} />
+          <Route path="/workflows" element={<WorkflowPage />} />
           <Route path="/dlq" element={<DLQPage />} />
         </Route>
 

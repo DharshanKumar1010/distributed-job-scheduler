@@ -10,20 +10,19 @@ from datetime import datetime, timezone
 
 import psutil
 from redis.asyncio import Redis
-from sqlalchemy import func, select, text, update
+from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.dead_letter_queue import DeadLetterQueueEntry
 from app.models.job import Job, JobStatus
-from app.models.job_dependency import JobDependency
 from app.models.job_execution import JobExecution
 from app.models.job_log import JobLog, LogLevel
 from app.models.project import Project
 from app.models.queue import Queue
 from app.models.worker import Worker, WorkerHeartbeat, WorkerStatus
-from app.services import queue_service
+from app.services import dependency_service, queue_service
 from app.websocket.publisher import publish_event
 from app.worker.retry import compute_next_run
 
@@ -301,7 +300,8 @@ class JobWorker:
 
         if error is None:
             await self._finish_success(job_id, execution_id, completed_at, duration_ms)
-            await self._unblock_dependents(job_id)
+            async with AsyncSessionLocal() as db:
+                await dependency_service.check_and_unblock(job_id, db, self.redis, self.org_id)
             await self._publish_event(
                 "job.completed",
                 {
@@ -453,28 +453,6 @@ class JobWorker:
                     "last_error": str(error),
                 },
             )
-
-    async def _unblock_dependents(self, completed_job_id: uuid.UUID) -> None:
-        async with AsyncSessionLocal() as db:
-            dependents_result = await db.execute(
-                select(JobDependency.job_id).where(JobDependency.depends_on_job_id == completed_job_id)
-            )
-            dependent_ids = {row[0] for row in dependents_result.all()}
-
-            for dependent_id in dependent_ids:
-                job = await db.get(Job, dependent_id)
-                if job is None or job.status != JobStatus.blocked:
-                    continue
-                remaining = await db.scalar(
-                    select(func.count())
-                    .select_from(JobDependency)
-                    .join(Job, Job.id == JobDependency.depends_on_job_id)
-                    .where(JobDependency.job_id == dependent_id, Job.status != JobStatus.completed)
-                )
-                if (remaining or 0) == 0:
-                    job.status = JobStatus.queued
-
-            await db.commit()
 
     async def _publish_queue_stats(self, queue_id: uuid.UUID) -> None:
         async with AsyncSessionLocal() as db:

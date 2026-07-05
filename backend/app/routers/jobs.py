@@ -7,6 +7,11 @@ from app.dependencies import get_current_user, get_db
 from app.models.job import JobStatus, JobType
 from app.models.user import User
 from app.schemas.common import DataResponse, PaginatedResponse, PaginationMeta
+from app.schemas.dependency import (
+    AddDependencyRequest,
+    DependencyGraphOut,
+    DependentOut,
+)
 from app.schemas.job import (
     BatchCancelRequest,
     BatchCancelResult,
@@ -16,7 +21,8 @@ from app.schemas.job import (
     JobLogOut,
     JobOut,
 )
-from app.services import job_service
+from app.schemas.workflow import WorkflowCreateRequest, WorkflowCreateResult
+from app.services import dependency_service, job_service
 
 router = APIRouter(tags=["jobs"])
 
@@ -123,3 +129,65 @@ async def batch_cancel_jobs(
 ):
     result = await job_service.batch_cancel_jobs(db, current_user.org_id, payload.job_ids)
     return DataResponse(data=BatchCancelResult(**result))
+
+
+@router.get("/jobs/{job_id}/dependencies", response_model=DataResponse[DependencyGraphOut])
+async def get_job_dependencies(
+    job_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await job_service.get_job_for_org(db, current_user.org_id, job_id)
+    graph = await dependency_service.get_dependency_graph(job_id, db)
+    all_ids = dependency_service.collect_all_job_ids(graph)
+    workflow_status = await dependency_service.get_workflow_status(all_ids, db)
+    return DataResponse(
+        data=DependencyGraphOut.model_validate({**graph, "workflow_status": workflow_status})
+    )
+
+
+@router.get("/jobs/{job_id}/dependents", response_model=DataResponse[list[DependentOut]])
+async def get_job_dependents(
+    job_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await job_service.get_job_for_org(db, current_user.org_id, job_id)
+    dependents = await dependency_service.get_direct_dependents_with_status(job_id, db)
+    return DataResponse(data=[DependentOut.model_validate(d) for d in dependents])
+
+
+@router.post("/jobs/{job_id}/dependencies", response_model=DataResponse[JobOut])
+async def add_job_dependency(
+    job_id: uuid.UUID,
+    payload: AddDependencyRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job = await job_service.add_dependency(
+        db, current_user.org_id, job_id, payload.depends_on_job_id
+    )
+    return DataResponse(data=JobOut.model_validate(job))
+
+
+@router.delete("/jobs/{job_id}/dependencies/{dep_job_id}", response_model=DataResponse[JobOut])
+async def remove_job_dependency(
+    job_id: uuid.UUID,
+    dep_job_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job = await job_service.remove_dependency(db, current_user.org_id, job_id, dep_job_id)
+    return DataResponse(data=JobOut.model_validate(job))
+
+
+@router.post("/workflows", response_model=DataResponse[WorkflowCreateResult])
+async def create_workflow(
+    payload: WorkflowCreateRequest,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await job_service.create_workflow(db, current_user.org_id, payload)
+    response.status_code = status.HTTP_201_CREATED
+    return DataResponse(data=result)

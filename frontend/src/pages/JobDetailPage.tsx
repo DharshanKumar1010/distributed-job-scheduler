@@ -9,12 +9,88 @@ import { LogViewer } from '../components/LogViewer'
 import { PageHeader } from '../components/PageHeader'
 import { Skeleton } from '../components/Skeleton'
 import { StatusBadge } from '../components/StatusBadge'
+import { useJobDependencies, useJobDependents } from '../hooks/useDependencies'
 import { useJob } from '../hooks/useJobs'
 import { formatDateTime } from '../lib/format'
 import type { JobExecution } from '../types'
 
 const CANCELLABLE = new Set(['queued', 'scheduled', 'blocked'])
 const RETRYABLE = new Set(['failed', 'dead'])
+
+function DependencyPill({
+  name,
+  status,
+  onClick,
+}: {
+  name: string
+  status: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-elevated px-2.5 py-1 text-xs text-primary transition-colors hover:border-accent"
+    >
+      <span className="max-w-[140px] truncate">{name}</span>
+      <StatusBadge status={status} />
+    </button>
+  )
+}
+
+function DependenciesSection({ jobId }: { jobId: string }) {
+  const navigate = useNavigate()
+  const { data: graph } = useJobDependencies(jobId)
+  const { data: dependents } = useJobDependents(jobId)
+
+  const dependsOn = graph?.depends_on ?? []
+
+  if (dependsOn.length === 0 && (dependents ?? []).length === 0) return null
+
+  return (
+    <div className="mt-6 rounded-lg border border-border bg-card p-5">
+      <div className="mb-4 text-xs uppercase tracking-widest text-secondary">Dependencies</div>
+
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-wide text-secondary">Depends on</div>
+          {dependsOn.length === 0 ? (
+            <div className="text-sm text-secondary">No dependencies</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {dependsOn.map((dep) => (
+                <DependencyPill
+                  key={dep.job_id}
+                  name={dep.name}
+                  status={dep.status}
+                  onClick={() => navigate(`/jobs/${dep.job_id}`)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-wide text-secondary">Blocking</div>
+          {(dependents ?? []).length === 0 ? (
+            <div className="text-sm text-secondary">Nothing waiting on this job</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {(dependents ?? []).map((dep) => (
+                <DependencyPill
+                  key={dep.job_id}
+                  name={dep.name}
+                  status={dep.status}
+                  onClick={() => navigate(`/jobs/${dep.job_id}`)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -76,6 +152,7 @@ export function JobDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data: job, isLoading, isError, refetch } = useJob(jobId)
+  const { data: graph } = useJobDependencies(jobId)
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['job', jobId] })
@@ -96,8 +173,32 @@ export function JobDetailPage() {
     return <ErrorState message="Couldn't load job" onRetry={() => refetch()} />
   }
 
+  const dependsOn = graph?.depends_on ?? []
+  const unmetDeps = dependsOn.filter((dep) => dep.status !== 'completed')
+  const showBlockedBanner = job.status === 'blocked' && unmetDeps.length > 0
+  const showUnblockedBanner =
+    job.status === 'queued' && dependsOn.length > 0 && unmetDeps.length === 0
+
   return (
     <div>
+      {showBlockedBanner && (
+        <div
+          className="mb-4 rounded-md border-l-4 bg-elevated px-4 py-3 text-sm text-primary"
+          style={{ borderLeftColor: 'var(--warning)' }}
+        >
+          ⏸ Waiting for {unmetDeps.length} job{unmetDeps.length === 1 ? '' : 's'} to complete:{' '}
+          <span className="text-secondary">{unmetDeps.map((dep) => dep.name).join(', ')}</span>
+        </div>
+      )}
+      {showUnblockedBanner && (
+        <div
+          className="mb-4 rounded-md border-l-4 bg-elevated px-4 py-3 text-sm text-primary"
+          style={{ borderLeftColor: 'var(--success)' }}
+        >
+          ✓ All dependencies satisfied — queued for execution
+        </div>
+      )}
+
       <PageHeader
         title={job.name}
         description={`Queue ${job.queue_id}`}
@@ -160,6 +261,8 @@ export function JobDetailPage() {
           <JsonViewer data={job.payload} />
         </div>
       </div>
+
+      <DependenciesSection jobId={job.id} />
 
       {/* B. Execution history */}
       <div className="mt-6 overflow-hidden rounded-lg border border-border bg-card">

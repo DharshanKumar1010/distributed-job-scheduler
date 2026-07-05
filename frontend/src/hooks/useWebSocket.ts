@@ -45,6 +45,8 @@ function jobStatusFromEvent(event: WsEnvelope['event'], payload: WsJobEventData)
       return payload.will_retry ? 'queued' : null
     case 'job.dead':
       return 'dead'
+    case 'job.unblocked':
+      return 'queued'
     default:
       return null
   }
@@ -84,6 +86,19 @@ function handleEnvelope(envelope: WsEnvelope): void {
       )
       queryClient.invalidateQueries({ queryKey: ['jobs', payload.queue_id] })
       if (event === 'job.completed') stats.incrementCurrentMinuteBucket()
+      if (event === 'job.completed' || event === 'job.dead') {
+        queryClient.invalidateQueries({ queryKey: ['job-dependents', payload.job_id] })
+      }
+      break
+    }
+    case 'job.unblocked': {
+      const payload = data as WsJobEventData
+      queryClient.setQueryData<JobDetail>(['job', payload.job_id], (old) =>
+        old ? applyJobEventPatch(old, event, payload) : old,
+      )
+      queryClient.invalidateQueries({ queryKey: ['jobs', payload.queue_id] })
+      queryClient.invalidateQueries({ queryKey: ['job-dependencies'] })
+      queryClient.invalidateQueries({ queryKey: ['job-dependents'] })
       break
     }
     case 'worker.heartbeat': {

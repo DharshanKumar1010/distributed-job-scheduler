@@ -5,10 +5,23 @@ import { useAuthStore } from '../store/authStore'
 import { Logo } from './Logo'
 import { PulseRing } from './PulseRing'
 
+function DagIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor">
+      <circle cx="3.5" cy="3.5" r="2" strokeWidth={strokeWidth} />
+      <circle cx="12.5" cy="3.5" r="2" strokeWidth={strokeWidth} />
+      <circle cx="8" cy="12.5" r="2" strokeWidth={strokeWidth} />
+      <path d="M5 4.8 L6.5 10.8" strokeWidth={strokeWidth} strokeLinecap="round" />
+      <path d="M11 4.8 L9.5 10.8" strokeWidth={strokeWidth} strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/queues', label: 'Queues', icon: ListTree },
   { to: '/workers', label: 'Workers', icon: Users },
+  { to: '/workflows', label: 'Workflows', icon: DagIcon },
   { to: '/dlq', label: 'Dead Letters', icon: Skull },
 ]
 
@@ -18,6 +31,7 @@ function breadcrumbFor(pathname: string): string {
   if (pathname.startsWith('/queues')) return 'Queues'
   if (/^\/jobs\/[^/]+/.test(pathname)) return 'Jobs / Job Detail'
   if (pathname.startsWith('/workers')) return 'Workers'
+  if (pathname.startsWith('/workflows')) return 'Workflows'
   if (pathname.startsWith('/dlq')) return 'Dead Letter Queue'
   return ''
 }

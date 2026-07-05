@@ -21,6 +21,7 @@ const EVENT_STYLES: Record<WsEventName, { bg: string; text: string; label: strin
   'job.completed': { bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981', label: 'completed' },
   'job.failed': { bg: 'rgba(239, 68, 68, 0.15)', text: '#EF4444', label: 'failed' },
   'job.dead': { bg: 'rgba(127, 29, 29, 0.35)', text: '#F87171', label: 'dead' },
+  'job.unblocked': { bg: 'rgba(59, 130, 246, 0.15)', text: '#3B82F6', label: 'unblocked' },
   'worker.connected': { bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981', label: 'worker' },
   'worker.disconnected': { bg: 'rgba(100, 116, 139, 0.15)', text: '#94A3B8', label: 'worker' },
   'worker.heartbeat': { bg: 'rgba(100, 116, 139, 0.15)', text: '#94A3B8', label: 'heartbeat' },

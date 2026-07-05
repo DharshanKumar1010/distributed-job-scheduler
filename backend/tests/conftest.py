@@ -43,3 +43,35 @@ async def test_queue():
         await db.execute(delete(Worker).where(Worker.queue_id == queue_id))
         await db.execute(delete(Organization).where(Organization.id == org_id))
         await db.commit()
+
+
+@pytest_asyncio.fixture
+async def test_org_queue():
+    """Like test_queue, but also yields the owning org_id (needed by
+    dependency_service calls that are org-scoped)."""
+    async with AsyncSessionLocal() as db:
+        suffix = uuid.uuid4().hex[:8]
+        org = Organization(name="Test Org", slug=f"test-org-{suffix}")
+        db.add(org)
+        await db.flush()
+
+        project = Project(org_id=org.id, name="Test Project", slug=f"test-project-{suffix}")
+        db.add(project)
+        await db.flush()
+
+        queue = Queue(project_id=project.id, name="Test Queue", slug=f"test-queue-{suffix}")
+        db.add(queue)
+        await db.commit()
+        await db.refresh(queue)
+
+        queue_id = queue.id
+        org_id = org.id
+
+    yield org_id, queue_id
+
+    async with AsyncSessionLocal() as db:
+        await db.execute(delete(DeadLetterQueueEntry).where(DeadLetterQueueEntry.queue_id == queue_id))
+        await db.execute(delete(Job).where(Job.queue_id == queue_id))
+        await db.execute(delete(Worker).where(Worker.queue_id == queue_id))
+        await db.execute(delete(Organization).where(Organization.id == org_id))
+        await db.commit()
